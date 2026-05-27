@@ -65,10 +65,10 @@ class DesignerBaser(dbing.LMDBer):
     def reopen(self, **kwa):
         super().reopen(**kwa)
         self.index = koming.Komer(
-            db=self, subkey='idx.', schema=TemplateIndexRecord,
+            db=self, subkey='idx.', klas=TemplateIndexRecord,
         )
         self.open_state = koming.Komer(
-            db=self, subkey='ops.', schema=OpenStateRecord,
+            db=self, subkey='ops.', klas=OpenStateRecord,
         )
         return self.env
 
