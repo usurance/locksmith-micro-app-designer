@@ -18,7 +18,7 @@ from keri import help
 
 from locksmith.plugins.base import VaultPlugin
 
-_ICON_PATH = str(Path(__file__).parent / "assets" / "micro-app.svg")
+_ICON_PATH = str(Path(__file__).parent / "assets" / "micro-app-v2.svg")
 
 from locksmith_micro_app_designer.crossref import compute_crossrefs
 from locksmith_micro_app_designer.db import DesignerBaser
