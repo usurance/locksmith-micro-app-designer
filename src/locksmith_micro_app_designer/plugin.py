@@ -16,7 +16,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QWidget
 from keri import help
 
-from locksmith.plugins.base import PluginBase
+from locksmith.plugins.base import VaultPlugin
 from locksmith_micro_app_designer.crossref import compute_crossrefs
 from locksmith_micro_app_designer.db import DesignerBaser
 from locksmith_micro_app_designer.editors.aggregates import AggregatesEditorPage
@@ -45,7 +45,7 @@ from locksmith.ui.vault.menu import MenuButton, MenuSpacer
 logger = help.ogler.getLogger(__name__)
 
 
-class DesignerPlugin(PluginBase):
+class DesignerPlugin(VaultPlugin):
     @property
     def plugin_id(self) -> str:
         return "designer"
