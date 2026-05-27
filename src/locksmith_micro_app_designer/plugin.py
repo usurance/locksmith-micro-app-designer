@@ -17,6 +17,9 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox, QWidget
 from keri import help
 
 from locksmith.plugins.base import VaultPlugin
+
+_ICON_PATH = str(Path(__file__).parent / "assets" / "micro-app.svg")
+
 from locksmith_micro_app_designer.crossref import compute_crossrefs
 from locksmith_micro_app_designer.db import DesignerBaser
 from locksmith_micro_app_designer.editors.aggregates import AggregatesEditorPage
@@ -239,14 +242,14 @@ class DesignerPlugin(VaultPlugin):
 
     def get_menu_entry(self) -> MenuButton:
         return MenuButton(
-            icon=QIcon(":/assets/material-icons/micro-app.svg"),
+            icon=QIcon(_ICON_PATH),
             label="Micro App Designer",
         )
 
     def get_menu_section(self) -> list[QWidget]:
         items: list[QWidget] = [BackButton(dark_mode=False), MenuSpacer(15)]
         self._templates_nav_button = MenuButton(
-            icon=QIcon(":/assets/material-icons/micro-app.svg"),
+            icon=QIcon(_ICON_PATH),
             label="Micro-App Designer",
         )
         self._templates_nav_button.clicked.connect(self._show_templates_browser)
