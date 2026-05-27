@@ -68,6 +68,10 @@ class PrimitiveEditorShell(QWidget):
         strip_lay.setContentsMargins(16, 10, 16, 10)
         self.back_button = QPushButton("← Back")
         self.back_button.setFlat(True)
+        # First focusable widget in the strip — without NoFocus, Qt
+        # auto-focuses it when the page is shown and macOS draws a
+        # blue ring around it. Back is mouse-only.
+        self.back_button.setFocusPolicy(Qt.NoFocus)
         self.back_button.clicked.connect(self.back_clicked.emit)
         strip_lay.addWidget(self.back_button)
         sep1 = QLabel("·")
