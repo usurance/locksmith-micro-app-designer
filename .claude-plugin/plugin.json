@@ -1,0 +1,12 @@
+{
+  "name": "micro-app-template-gen",
+  "description": "Guided 10-step authoring of micro-app templates: one role's slice of one use case, expressed as a JSON artifact on top of KERI primitives. Includes worked examples, naming conventions, UEL/1.0 cheat-sheet, and an adversarial review checklist.",
+  "version": "0.1.0",
+  "author": {
+    "name": "SeriousCoderOne"
+  },
+  "homepage": "https://github.com/seriouscoderone/locksmith-micro-app-designer",
+  "repository": "https://github.com/seriouscoderone/locksmith-micro-app-designer",
+  "license": "MIT",
+  "keywords": ["keri", "acdc", "micro-app", "authoring", "ssi"]
+}

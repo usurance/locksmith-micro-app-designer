@@ -1,0 +1,26 @@
+[project]
+name = "locksmith-micro-app-designer"
+version = "0.1.0"
+description = "Locksmith plugin: direct-manipulation authoring UI for micro-app templates"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.13"
+authors = [{ name = "seriouscoderone" }]
+dependencies = []
+
+# Scripts live at top-level scripts/ — invoked as `python scripts/micro_app_saidify.py`
+# (matching the convention assumed by the micro-app-template-gen skill).
+
+[project.urls]
+Homepage = "https://github.com/seriouscoderone/locksmith-micro-app-designer"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

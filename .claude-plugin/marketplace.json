@@ -1,0 +1,23 @@
+{
+  "name": "locksmith-micro-app-designer",
+  "owner": {
+    "name": "SeriousCoderOne",
+    "email": "joseph@seriouscoder.one"
+  },
+  "metadata": {
+    "description": "Micro-app authoring tools — the micro-app-template-gen Claude Code skill that walks an SME through producing a valid micro-app-template.json artifact. Companion to the Locksmith wallet plugin in this repo."
+  },
+  "plugins": [
+    {
+      "name": "micro-app-template-gen",
+      "source": "./",
+      "description": "Guided 10-step authoring of micro-app templates: one role's slice of one use case, expressed as a JSON artifact on top of KERI primitives (exn, IPEX, ACDC, TEL). Includes worked examples, naming conventions, UEL/1.0 cheat-sheet, and an adversarial review checklist.",
+      "version": "0.1.0",
+      "author": {
+        "name": "SeriousCoderOne"
+      },
+      "keywords": ["keri", "acdc", "micro-app", "authoring", "ssi"],
+      "category": "domain-knowledge"
+    }
+  ]
+}

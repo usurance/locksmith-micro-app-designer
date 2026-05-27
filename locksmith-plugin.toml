@@ -1,0 +1,13 @@
+plugin_id = "designer"
+entry_point = "locksmith_micro_app_designer.plugin:DesignerPlugin"
+manifest_version = 1
+name = "Micro-App Designer"
+version = "0.1.0"
+description = "Direct-manipulation authoring UI for micro-app templates. Edit the JSON template, configure runtime wiring, publish ACDC schemas and SAIDs to a registry, and (optionally) mock the runtime for local testing. Wallet-resident half of micro-app adoption — pairs with external compute and principal runtimes."
+author = "seriouscoderone"
+homepage = "https://github.com/seriouscoderone/locksmith-micro-app-designer"
+requires_locksmith = ">=0.0.1"
+capabilities = ["app.ui"]
+
+[capabilities_detail]
+"app.ui" = "Registers the Micro App: Designer sidebar entry and its editor pages."

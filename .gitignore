@@ -1,0 +1,43 @@
+# Byte-compiled
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Type checkers
+.mypy_cache/
+.pyre/
+.pytype/
+
+# Linter cache
+.ruff_cache/
+
+# Editors
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Claude Code per-project state
+.claude/*.lock
+.claude/projects/
+.claude/shell-snapshots/
+.claude/todos/
