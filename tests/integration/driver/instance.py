@@ -51,6 +51,8 @@ class EphemeralWallet:
 
     The temp HOME is created under /tmp (NOT the default $TMPDIR) because macOS
     AF_UNIX socket paths must stay under 104 chars; $TMPDIR paths are too long.
+    The wallet's stdout+stderr are captured to <home>/wallet.log; on a boot
+    failure the log tail is included in the raised error to aid debugging.
     """
 
     def __init__(self, binary: str = LOCKSMITH_BINARY,
@@ -60,8 +62,10 @@ class EphemeralWallet:
         self.boot_timeout = boot_timeout
         self._tmp: str | None = None
         self._proc: subprocess.Popen | None = None
+        self._logf = None
         self.home: Path | None = None
         self.socket_path: str | None = None
+        self.log_path: Path | None = None
         self.client: Client | None = None
 
     def __enter__(self) -> "EphemeralWallet":
@@ -69,47 +73,73 @@ class EphemeralWallet:
         self._tmp = tempfile.mkdtemp(prefix="ls-it-", dir="/tmp")
         self.home = Path(self._tmp)
         self.socket_path = str(self.home / ".locksmith-control.sock")
-        seed_plugin_home(self.home, self.plugins_root)
+        self.log_path = self.home / "wallet.log"
+        try:
+            seed_plugin_home(self.home, self.plugins_root)
 
-        env = dict(os.environ)
-        env["HOME"] = str(self.home)
-        env["LOCKSMITH_CONTROL_SOCKET"] = self.socket_path
-        self._proc = subprocess.Popen(
-            [self.binary], env=env,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
+            env = dict(os.environ)
+            env["HOME"] = str(self.home)
+            env["LOCKSMITH_CONTROL_SOCKET"] = self.socket_path
+            self._logf = open(self.log_path, "wb")
+            self._proc = subprocess.Popen(
+                [self.binary], env=env,
+                stdout=self._logf, stderr=subprocess.STDOUT,
+            )
 
-        deadline = time.monotonic() + self.boot_timeout
-        while time.monotonic() < deadline:
-            if self._proc.poll() is not None:
-                self._cleanup_tmp()
-                raise RuntimeError(
-                    f"Locksmith exited early (code {self._proc.returncode}) "
-                    f"before its socket appeared"
-                )
-            if os.path.exists(self.socket_path):
-                candidate = Client(socket_path=self.socket_path)
-                try:
-                    if candidate.ping():
-                        self.client = candidate
-                        return self
-                except OSError:
-                    pass
-            time.sleep(0.25)
-        self.__exit__(None, None, None)
-        raise TimeoutError(
-            f"wallet socket {self.socket_path} did not come up within {self.boot_timeout}s"
-        )
+            deadline = time.monotonic() + self.boot_timeout
+            while time.monotonic() < deadline:
+                if self._proc.poll() is not None:
+                    raise RuntimeError(
+                        f"Locksmith exited early (code {self._proc.returncode}) "
+                        f"before its socket appeared{self._log_tail()}"
+                    )
+                if os.path.exists(self.socket_path):
+                    candidate = Client(socket_path=self.socket_path)
+                    try:
+                        if candidate.ping():
+                            self.client = candidate
+                            return self
+                    except Exception:
+                        pass
+                time.sleep(0.25)
+            raise TimeoutError(
+                f"wallet socket {self.socket_path} did not come up within "
+                f"{self.boot_timeout}s{self._log_tail()}"
+            )
+        except BaseException:
+            # Any failure after mkdtemp must not leak the process or temp dir.
+            self.__exit__(None, None, None)
+            raise
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, exc_type=None, exc_val=None, exc_tb=None) -> None:
         if self._proc is not None and self._proc.poll() is None:
             self._proc.terminate()
             try:
                 self._proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 self._proc.kill()
-                self._proc.wait(timeout=5)
+                try:
+                    self._proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
+        if self._logf is not None:
+            try:
+                self._logf.close()
+            except OSError:
+                pass
+            self._logf = None
         self._cleanup_tmp()
+
+    def _log_tail(self, limit: int = 2000) -> str:
+        """Return a short tail of the wallet log for error messages (best-effort)."""
+        try:
+            if self._logf is not None:
+                self._logf.flush()
+            data = self.log_path.read_bytes()[-limit:]
+            text = data.decode("utf-8", "replace").strip()
+            return f"\n--- wallet.log tail ---\n{text}" if text else ""
+        except OSError:
+            return ""
 
     def _cleanup_tmp(self) -> None:
         if self._tmp is not None:
