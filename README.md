@@ -7,7 +7,7 @@ Two artifacts in one repo, both about authoring **micro-app templates** — the 
 | **Locksmith wallet plugin** | An SME or developer editing templates inside their wallet | `pip install -e .` into Locksmith's venv, then install via Locksmith's Plugins page |
 | **Claude Code marketplace plugin** (`micro-app-template-gen` skill) | An SME working with Claude Code to walk through template authoring conversationally | `claude plugin marketplace add <repo-url>` then `claude plugin install micro-app-template-gen@locksmith-micro-app-designer` |
 
-Both paths produce the same artifact: `micro-app-template.json` + `metadata.json` + `schemas/*.json`, conforming to the spec at `docs/specs/2026-05-09-micro-app-template-authoring-and-data-model.md`.
+Both paths produce the same artifact: `micro-app-template.json` + `metadata.json` + `schemas/*.json`, conforming to the spec at `docs/superpowers/specs/2026-05-09-micro-app-template-authoring-and-data-model.md`.
 
 ## What's in the plugin (wallet-side)
 
@@ -46,7 +46,8 @@ src/locksmith_micro_app_designer/  Python plugin source (entry: DesignerPlugin)
   └── template/                  Template canonical-JSON / saidify / validate library
 skills/micro-app-template-gen/   Claude Code skill (distributed via marketplace)
 scripts/                         CLI utilities (saidify, validate)
-docs/specs/                      Normative artifact contract
+docs/superpowers/specs/          Normative artifact contract + meta-schemas
+docs/superpowers/plans/          Designer-plugin build plans (historical)
 tests/                           Library tests
 ```
 
