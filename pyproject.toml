@@ -27,3 +27,6 @@ locksmith_micro_app_designer = ["assets/*.svg"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "tests/integration"]
+# macOS AF_UNIX sockets have a 104-char path limit; use a short basetemp so
+# tmp_path-based socket paths stay well under it.
+addopts = "--basetemp=/tmp/pt"
