@@ -26,4 +26,4 @@ locksmith_micro_app_designer = ["assets/*.svg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests/integration"]
