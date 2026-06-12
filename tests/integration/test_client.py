@@ -1,10 +1,24 @@
 import json
+import os
+import shutil
 import socket
+import tempfile
 import threading
+from contextlib import contextmanager
 
 import pytest
 
 from driver.client import Client, ControlError, default_socket_path
+
+
+@contextmanager
+def _short_socket_dir():
+    # macOS AF_UNIX paths must be < 104 chars; pytest's tmp_path is too long.
+    d = tempfile.mkdtemp(dir="/tmp", prefix="lct-")
+    try:
+        yield d
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def _start_server(path, reply: bytes, captured: list) -> threading.Thread:
@@ -31,45 +45,48 @@ def _start_server(path, reply: bytes, captured: list) -> threading.Thread:
     return t
 
 
-def test_call_frames_request_and_parses_reply(tmp_path):
-    sock_path = str(tmp_path / "ctl.sock")
-    captured: list = []
-    reply = json.dumps({"ok": True, "pong": True}).encode() + b"\n"
-    t = _start_server(sock_path, reply, captured)
+def test_call_frames_request_and_parses_reply():
+    with _short_socket_dir() as d:
+        sock_path = os.path.join(d, "ctl.sock")
+        captured: list = []
+        reply = json.dumps({"ok": True, "pong": True}).encode() + b"\n"
+        t = _start_server(sock_path, reply, captured)
 
-    client = Client(socket_path=sock_path)
-    result = client.call("ping")
-    t.join(timeout=5)
+        client = Client(socket_path=sock_path)
+        result = client.call("ping")
+        t.join(timeout=5)
 
-    assert result == {"ok": True, "pong": True}
-    assert json.loads(captured[0].decode().strip()) == {"op": "ping"}
-
-
-def test_call_includes_kwargs_in_payload(tmp_path):
-    sock_path = str(tmp_path / "ctl.sock")
-    captured: list = []
-    reply = json.dumps({"ok": True}).encode() + b"\n"
-    t = _start_server(sock_path, reply, captured)
-
-    client = Client(socket_path=sock_path)
-    client.call("type", target="field", text="hi")
-    t.join(timeout=5)
-
-    assert json.loads(captured[0].decode().strip()) == {
-        "op": "type", "target": "field", "text": "hi",
-    }
+        assert result == {"ok": True, "pong": True}
+        assert json.loads(captured[0].decode().strip()) == {"op": "ping"}
 
 
-def test_call_raises_control_error_on_error_reply(tmp_path):
-    sock_path = str(tmp_path / "ctl.sock")
-    captured: list = []
-    reply = json.dumps({"error": "widget not found"}).encode() + b"\n"
-    t = _start_server(sock_path, reply, captured)
+def test_call_includes_kwargs_in_payload():
+    with _short_socket_dir() as d:
+        sock_path = os.path.join(d, "ctl.sock")
+        captured: list = []
+        reply = json.dumps({"ok": True}).encode() + b"\n"
+        t = _start_server(sock_path, reply, captured)
 
-    client = Client(socket_path=sock_path)
-    with pytest.raises(ControlError):
-        client.call("click", target="nope")
-    t.join(timeout=5)
+        client = Client(socket_path=sock_path)
+        client.call("type", target="field", text="hi")
+        t.join(timeout=5)
+
+        assert json.loads(captured[0].decode().strip()) == {
+            "op": "type", "target": "field", "text": "hi",
+        }
+
+
+def test_call_raises_control_error_on_error_reply():
+    with _short_socket_dir() as d:
+        sock_path = os.path.join(d, "ctl.sock")
+        captured: list = []
+        reply = json.dumps({"error": "widget not found"}).encode() + b"\n"
+        t = _start_server(sock_path, reply, captured)
+
+        client = Client(socket_path=sock_path)
+        with pytest.raises(ControlError):
+            client.call("click", target="nope")
+        t.join(timeout=5)
 
 
 def test_default_socket_path_honors_env(monkeypatch):
