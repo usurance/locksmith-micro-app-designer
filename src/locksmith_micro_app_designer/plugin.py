@@ -241,10 +241,12 @@ class DesignerPlugin(VaultPlugin):
         vault_page._show_page(page_key)
 
     def get_menu_entry(self) -> MenuButton:
-        return MenuButton(
+        button = MenuButton(
             icon=QIcon(_ICON_PATH),
             label="Micro App Designer",
         )
+        button.setObjectName("designer.navButton")
+        return button
 
     def get_menu_section(self) -> list[QWidget]:
         items: list[QWidget] = [BackButton(dark_mode=False), MenuSpacer(15)]
@@ -252,6 +254,7 @@ class DesignerPlugin(VaultPlugin):
             icon=QIcon(_ICON_PATH),
             label="Micro-App Designer",
         )
+        self._templates_nav_button.setObjectName("designer.templatesNavButton")
         self._templates_nav_button.clicked.connect(self._show_templates_browser)
         items.append(self._templates_nav_button)
         return items
