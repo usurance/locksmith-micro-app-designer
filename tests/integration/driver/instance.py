@@ -31,4 +31,6 @@ def seed_plugin_home(home: Path, plugins_root: Path = REAL_PLUGINS_ROOT) -> None
             continue
         src = plugins_root / pid
         if src.exists():
-            (dest / pid).symlink_to(src, target_is_directory=True)
+            link = dest / pid
+            link.unlink(missing_ok=True)  # idempotent: replace stale/broken link on re-run
+            link.symlink_to(src, target_is_directory=True)
