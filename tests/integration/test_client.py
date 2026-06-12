@@ -55,6 +55,7 @@ def test_call_frames_request_and_parses_reply():
         client = Client(socket_path=sock_path)
         result = client.call("ping")
         t.join(timeout=5)
+        assert not t.is_alive()
 
         assert result == {"ok": True, "pong": True}
         assert json.loads(captured[0].decode().strip()) == {"op": "ping"}
@@ -70,6 +71,7 @@ def test_call_includes_kwargs_in_payload():
         client = Client(socket_path=sock_path)
         client.call("type", target="field", text="hi")
         t.join(timeout=5)
+        assert not t.is_alive()
 
         assert json.loads(captured[0].decode().strip()) == {
             "op": "type", "target": "field", "text": "hi",
@@ -87,6 +89,7 @@ def test_call_raises_control_error_on_error_reply():
         with pytest.raises(ControlError):
             client.call("click", target="nope")
         t.join(timeout=5)
+        assert not t.is_alive()
 
 
 def test_default_socket_path_honors_env(monkeypatch):

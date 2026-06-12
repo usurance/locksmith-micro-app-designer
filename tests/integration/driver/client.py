@@ -33,10 +33,9 @@ class Client:
         self.timeout = timeout
 
     def call(self, op: str, **kwargs) -> dict:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(self.timeout)
-        sock.connect(self.socket_path)
-        try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(self.timeout)
+            sock.connect(self.socket_path)
             payload = {"op": op, **kwargs}
             sock.sendall(json.dumps(payload).encode("utf-8") + b"\n")
             buf = b""
@@ -45,8 +44,10 @@ class Client:
                 if not chunk:
                     break
                 buf += chunk
-        finally:
-            sock.close()
+        if b"\n" not in buf:
+            raise ControlError(
+                f"{op}: connection closed before response newline; raw={buf!r}"
+            )
         line = buf.split(b"\n", 1)[0].decode("utf-8")
         result = json.loads(line)
         if isinstance(result, dict) and "error" in result:
