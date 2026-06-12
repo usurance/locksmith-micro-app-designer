@@ -6,8 +6,12 @@ Drives the Locksmith wallet through the `locksmith-ui-tester` control socket.
 
 - `client.py` — `Client(socket_path)`; `.call(op, **kwargs)`, `.wait_for(...)`, `.ping()`.
 - `selectors.py` — page objects (objectName constants). **The selector cheatsheet.**
-- `actions.py` — `create_vault`, `open_vault`, `open_designer`.
+- `actions.py` — `create_vault`, `open_vault`, `close_vault`, `open_designer`.
 - `instance.py` — `EphemeralWallet` (throwaway-HOME instance) + `seed_plugin_home`.
+
+Fixtures (`conftest.py`): `ephemeral_wallet` (session-scoped, reused) and
+`fresh_wallet` (a pristine instance per test); `running_wallet` targets your
+already-open wallet. All skip when their prerequisite is absent.
 
 ## Running
 

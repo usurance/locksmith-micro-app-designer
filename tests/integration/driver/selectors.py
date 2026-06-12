@@ -20,6 +20,10 @@ class VaultDrawer:
         return f"vaultDrawer.open.{name}"    # click — opens the unlock dialog
 
     @staticmethod
+    def close_button(name: str) -> str:
+        return f"vaultDrawer.close.{name}"   # click — closes the currently-open vault
+
+    @staticmethod
     def row(name: str) -> str:
         return f"vaultDrawer.row.{name}"
 
@@ -38,6 +42,7 @@ class OpenVaultDialog:
 
 
 class Designer:
-    NAV_BUTTON = "designer.navButton"            # click — enters the plugin (set in plugin.py)
-    PAGE_OVERVIEW = "designer.overview"          # current_page value
-    PAGE_TEMPLATES = "designer.templates"        # current_page value
+    NAV_BUTTON = "designer.navButton"                      # click — enters the plugin (set in plugin.py)
+    TEMPLATES_NAV_BUTTON = "designer.templatesNavButton"   # click — in-plugin templates entry (set in plugin.py)
+    PAGE_OVERVIEW = "designer.overview"                    # current_page value
+    PAGE_TEMPLATES = "designer.templates"                  # current_page value

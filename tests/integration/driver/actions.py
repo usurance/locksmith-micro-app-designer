@@ -31,6 +31,17 @@ def open_vault(client, name: str, passcode: str) -> dict:
     return client.call("current_page")
 
 
+def close_vault(client, name: str) -> dict:
+    """Open the drawer and close the currently-open vault; return current_page.
+
+    The host's close handler toggles the drawer shut and returns home, so there
+    is no dialog to wait on — we just read the resulting page.
+    """
+    client.call("click", target=S.Toolbar.VAULTS_BUTTON)
+    client.call("click", target=S.VaultDrawer.close_button(name))
+    return client.call("current_page")
+
+
 def open_designer(client) -> dict:
     """Click the designer plugin's nav entry; return the resulting current_page."""
     client.call("click", target=S.Designer.NAV_BUTTON)
