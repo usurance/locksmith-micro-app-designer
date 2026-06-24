@@ -12,7 +12,7 @@ dependencies = []
 # (matching the convention assumed by the micro-app-template-gen skill).
 
 [project.urls]
-Homepage = "https://github.com/seriouscoderone/locksmith-micro-app-designer"
+Homepage = "https://github.com/usurance/locksmith-micro-app-designer"
 
 [build-system]
 requires = ["setuptools>=61"]
