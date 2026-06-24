@@ -38,7 +38,7 @@
 
 ### Task 1: `LMDBLedger` idempotency store
 
-`DynamoLedger` already works over any `db` via `subing.Suber`; `LMDBLedger` is the LMDB-backed sibling the local runtime defaults to. A keripy `Baser` (`hby.db`) is an `LMDBer`, and `Suber(db=<LMDBer>, subkey="proc.")` opens its own named sub-db on it.
+`DynamoLedger` records the idempotency ledger via `subing.Suber`; `LMDBLedger` is the LMDB-backed sibling the local runtime defaults to. **It cannot add a `Suber` to the wallet's main `Baser` (`hby.db`)** — that LMDB environment already uses all `MaxNamedDBs=100` named sub-DBs, so an extra `Suber` raises `lmdb.DbsFullError` (verified). So `LMDBLedger` opens its **own dedicated sibling `keri.db.dbing.LMDBer`** (name `<db.name>-proc`, alongside the wallet's db) and stores the ledger there via the same `Suber` `DynamoLedger` uses. (This mirrors how the designer plugin keeps its own `DesignerBaser` rather than crowding the vault db.)
 
 **Files:**
 - Modify: `keri_serviceaid/providers/idempotency.py`
@@ -76,18 +76,25 @@ Expected: FAIL — `ImportError: cannot import name 'LMDBLedger'`.
 
 - [ ] **Step 3: Implement** — append to `keri_serviceaid/providers/idempotency.py`:
 
+Change the import at the top of the file to `from keri.db import dbing, subing`, then append:
+
 ```python
 class LMDBLedger:
-    """Idempotency store on a keripy LMDB database (a Baser/LMDBer, e.g. hby.db).
+    """Idempotency store for the local runtime, on a dedicated keripy LMDBer.
 
-    Same shape as DynamoLedger — both go through subing.Suber, which opens its own
-    named sub-db on whatever LMDBer it is handed. Used by the local (in-wallet)
-    runtime where storage is LMDB rather than DynamoDB.
+    The idempotency ledger (inbound exn SAID -> signed grant) is a keri_serviceaid
+    pipeline concept (cloud sibling: DynamoLedger), not a keripy primitive. It
+    cannot live in the wallet's main Baser (hby.db): that LMDB env already uses all
+    MaxNamedDBs=100 named sub-DBs (DbsFullError). So LMDBLedger opens its OWN sibling
+    LMDBer (name '<db.name>-proc', alongside the wallet's db) and stores the ledger
+    there via the same Suber that DynamoLedger uses.
     """
 
     def __init__(self, db):
-        self.db = db
-        self.proc = subing.Suber(db=db, subkey=PROC_STORE)
+        self._led = dbing.LMDBer(name=f"{db.name}-proc", base=db.base,
+                                 headDirPath=db.headDirPath, temp=db.temp,
+                                 reopen=True)
+        self.proc = subing.Suber(db=self._led, subkey=PROC_STORE)
 
     def seen(self, said: str) -> bytes | None:
         raw = self.proc.get(keys=(said,))
@@ -97,6 +104,9 @@ class LMDBLedger:
 
     def record(self, said: str, grant: bytes) -> None:
         self.proc.pin(keys=(said,), val=bytes(grant))
+
+    def close(self) -> None:
+        self._led.close()
 ```
 
 - [ ] **Step 4: Export it.** In `keri_serviceaid/providers/__init__.py`, change the idempotency import + `__all__`:
