@@ -9,7 +9,7 @@
 
 ## 1. Goal
 
-Let a developer build an **in-wallet KERI Service AID** — a "local concierge" — as a lean Locksmith plugin, reusing the exact `keri_serviceaid` contract/pipeline/providers that already run in the cloud Lambda, by adding a `LocalRuntime` adapter plus a thin plugin-builder library and an AI skill.
+Let a developer build an **in-wallet KERI Service AID** — a "local concierge" — as a lean Locksmith plugin, reusing the exact `keri_serviceaid` contract/pipeline/providers that already run in the cloud Lambda, by adding a `LocalRuntime` adapter plus a thin plugin-builder library (an AI skill follows in a later plan).
 
 ## 2. Context & motivation
 
@@ -23,10 +23,11 @@ The framework is deliberately layered so the gap is small: `contract.py` and `pi
 
 **In scope (v1):**
 - A `LocalRuntime` adapter + `LMDBLedger` idempotency store + a `CredentialGate` authorizer (with a small `@command` contract extension), added to `keri_serviceaid`.
-- A new repo `concierge-api` containing the library `concierge-api-local` (the `ConciergePlugin` base + a UI-free `BindingController` + a reusable `AidSelectorPage` + scaffolding) and an **AI skill** that knows how to build a local concierge.
+- A new repo `concierge-api` containing the library `concierge-api-local` (the `ConciergePlugin` base + a UI-free `BindingController` + a reusable `AidSelectorPage` + scaffolding). The repo also *houses* the AI skill, but the skill is built in a follow-up plan (below).
 - A worked **Rating Engine** example that doubles as the integration fixture (no real insurance-domain schema modeling).
 
 **Non-goals (later phases):**
+- The **AI skill** (build-a-concierge scaffolding) — a follow-up plan, after the library exists.
 - Folding `keri_serviceaid` into `concierge-api` as the `concierge-api` core (planned; out of scope now).
 - Witnessed TEL issuance (v1 uses a no-backer registry, see §10).
 - Delegation-based outbound authority (v1 = issue-as-self ± credential edge).
@@ -37,7 +38,7 @@ The framework is deliberately layered so the gap is small: `contract.py` and `pi
 
 - **`concierge-api`** — new repo, the family monorepo.
 - **`concierge-api-local`** — the library in that repo (Locksmith plugin layer). Depends on `keri_serviceaid` + `locksmith`.
-- **AI skill** — lives in the same repo; mirrors `micro-app-template-gen` one level down (runtime, not authoring).
+- **AI skill** — lives in the same repo; mirrors `micro-app-template-gen` one level down (runtime, not authoring). **Built in a follow-up plan** (see §3), once the library lands.
 - **`ConciergePlugin`** — the base class a developer subclasses.
 - The `LocalRuntime` adapter lands in `keri_serviceaid` now (it reuses that package's internals — `RuntimeState`-style state, `_CaptureHandler`, `_wire_default_providers`, `pipeline`). In the later fold-in, `keri_serviceaid` becomes `concierge-api` (core) and the adapter re-homes cleanly in-repo.
 
@@ -51,10 +52,10 @@ Three layers, top to bottom. **The boundary rule: everything KERI-mechanical sta
    - pure Request → Reply logic (no KERI)
         │ subclasses / installs
         ▼
-② concierge-api-local (NEW repo: library + AI skill)
+② concierge-api-local (NEW repo: library now; AI skill follows)
    - ConciergePlugin base (VaultPlugin + AccountProviderPlugin)
    - BindingController (UI-free)        - AidSelectorPage (Qt, reusable)
-   - scaffolding + Rating Engine example + AI skill
+   - scaffolding + Rating Engine example    (AI skill = follow-up plan)
         │ depends on
         ▼
 ③ keri_serviceaid (existing pkg — small additions)
@@ -112,6 +113,8 @@ def rate(req: Request) -> Reply: ...
 ```
 `CredentialReq` and the extra `Command` field are the only contract additions. When `requires_credential` is absent, the command is gated only by the `ServiceAid`'s base authz (Allowlist/open).
 
+**Why declared on `@command`, not configured into the provider.** This mirrors the existing `issues` field exactly: per-command metadata is declared on `@command` and *consumed* by a provider — `cmd.issues` → the Issuer (`pipeline.py:68` `reply.schema_said = cmd.issues`), and now `cmd.requires_credential` → `CredentialGate`. `CredentialGate` therefore takes **no** per-command configuration (it reads the declaration off the command); a route→requirement map passed into the provider is explicitly rejected, since it would be the only per-command policy not co-located with the command.
+
 ### 6.2 `concierge-api-local` library
 
 **`ConciergePlugin(VaultPlugin, AccountProviderPlugin)`** — the base a developer subclasses:
@@ -156,7 +159,9 @@ class BindingController:
 
 **Scaffolding + Rating Engine example + AI skill** — see §6.3 and §12.
 
-### 6.3 AI skill
+### 6.3 AI skill (follow-up plan — not v1)
+
+> Built once the library lands; specified here only for context.
 
 Teaches/scaffolds a `ConciergePlugin`: choose `role_name` + `aid_policy`; declare `@command`s + ACDC schemas; declare `requires_credential` + presentation policy; generate the plugin skeleton plus a `TestRuntime` test; and a setup checklist (witnessing, credential acquisition). Mirrors `micro-app-template-gen` one level down. (A `micro-app-template.json` → `ServiceAid` skeleton generator is a noted future bridge, not v1.)
 
@@ -220,6 +225,7 @@ Per `KERI-COMMUNICATION-MODEL.md`: a reply is a **new signed message routed to t
 
 ## 13. Open questions & later phases
 
+- Build the **AI skill** (build-a-concierge scaffolding), once the library lands.
 - Fold `keri_serviceaid` into `concierge-api` as the core (renames; dependency re-homing).
 - Witnessed TEL issuance for local concierges.
 - Delegation-based outbound authority (Pattern A).
