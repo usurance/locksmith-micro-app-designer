@@ -82,14 +82,14 @@ The Risk-Profiler / Premium-Calculation **is a micro-app**: it gets a template; 
 | product-data ref (`ipd`/manifest) | data the compute `fn` reads | the **manifest SAID** / content SADs |
 
 **Decisions:**
-- **A — Resolution time:** **deploy/startup.** Template is static; the deploy manifest injects live data; the loader builds the `ServiceAid` (local: at vault startup via `BindingController`; cloud: at CDK deploy).
+- **A — Resolution time:** **deploy/startup.** Template is static; the deploy manifest injects live data; the loader builds the `ServiceAid` (local: at vault startup via `BindingController`; cloud: at CDK deploy). The **role AID is bound just before this** (§4.2): cloud auto-incepts at deploy; local binds via the one-time first-open setup.
 - **B — Compute reference:** the template names compute **abstractly** (capability id + payload/issue schemas); the deploy manifest **binds** it to an **ARN** (cloud) or a **Python entry-point** (local) — the same template runs in either runtime.
 - **C — Loader home:** a **template-aware layer in `concierge-api`**; `keri_serviceaid` stays template-agnostic.
 - **D — Deploy manifest:** a small declarative artifact (role AID, schema SAIDs, compute ARNs/entry-points, OOBIs, gating cred SAIDs, the product manifest SAID) merged with the template by the loader. CDK plugs in here for cloud.
 
-### 4.1 Per-compute credential gate
+### 4.1 Per-compute credential gate — who may *ask*
 
-Each command may declare an optional `requires_credential`:
+Each command may declare an optional `requires_credential` (about the **requester**; §4.2 is about the micro-app's *own* identity):
 ```
 requires_credential: {
   schema_said:            <ACDC type the requester must present>,   # deploy-filled
@@ -98,6 +98,19 @@ requires_credential: {
 }
 ```
 Enforcement (via `credgate`/`verify`): the requester **presents** the ACDC via IPEX/exn alongside the request; the gate checks schema match, issuer constraint, attribute constraints, and **not-revoked** (TEL); on failure → `Reply(kind="reject")`. The compute `fn` runs only if the gate passes. See §6.2 for the substrate-completion caveat.
+
+### 4.2 Identity binding — who the micro-app *is* (local vs cloud)
+
+The micro-app's **own** AID (the role's signing identity) is resolved **differently per runtime** and is a configuration input the loader consumes (orthogonal to §4.1 — that is who may *ask*; this is who the micro-app *is*):
+
+- **Cloud:** the role AID is **auto-incepted at deploy** — witnesses + keystore provisioned automatically via the existing per-stack **KMS-encrypted Secrets Manager keeper**. No human input.
+- **Local:** the user binds the AID via a **one-time, first-open setup step** — the concierge plugin's **`AidSelectorPage`** (currently an unbuilt stub) or, for the CLI path, a `build`/`bind` flag — choosing one of:
+  - **use an existing AID** they control (e.g. one already holding a credential authorizing it to *act as* the role),
+  - **use their own AID** (if it is so authorized), or
+  - **create a fresh AID** for the role.
+  This setup is **transient and non-revisitable**; it runs *before* `load(template, deploy)`, and the bound AID then fills the deploy manifest's role-AID slot.
+
+**Optional role-authorization credential:** the chosen AID may be required to hold a credential authorizing it to act in the role (an authz check on the micro-app's *own* identity — "this AID may *be* a Rating Engine"), verified at bind time. Distinct from §4.1's per-request gate.
 
 ## 5. Data production — collaborative authoring (the input, not the center)
 
@@ -124,7 +137,8 @@ The slot exists (`Command.requires_credential`, `credgate`/`verify`, `Credential
 - **`said`** — `said saidify <file> [--ndjson]` (wraps keripy saidify).
 - **`micro-app`** — verbs over the loader + authoring lib:
   - Data production: `party init`, `fragment issue`, `grant`, `admit`, `assemble`, `validate`, `publish`.
-  - Loader/build: `build --template <t> --deploy <d>` → instantiate (and, locally, run) a Service-AID from the template + deploy manifest; `call <route>` to exercise a command (presenting a gating credential if required).
+  - Identity binding (local, §4.2): `bind [--aid <existing> | --use-own | --create-aid] [--require-role-cred <said>]` → choose/create the micro-app's own AID (the CLI equivalent of the `AidSelectorPage`).
+  - Loader/build: `build --template <t> --deploy <d>` → instantiate (and, locally, run) a Service-AID from the template + deploy manifest (using the bound AID); `call <route>` to exercise a command (presenting a gating credential if required).
 
 Witness/OOBI config is a parameter (default local demo witnesses with mailboxes; swappable to the federation).
 
@@ -154,6 +168,7 @@ Assertions via exit codes / `grep`; hermetic (temp keystores; cleaned up). Insur
 | Multi-role party | **Non-issue** — one Service-AID per role; a dual-role party runs two. |
 | Designer↔runtime | **The loader IS the bridge** (symbolic→live resolution); designer plugin **not** rewritten — we consume its template. |
 | Qt entanglement in concierge-api | **None** — core Qt-free; `pages/` is a stub. |
+| Micro-app's own AID binding (§4.2) | Cloud = auto-incept at deploy (Secrets Manager keeper, exists). Local = one-time first-open setup; `AidSelectorPage` is the **unbuilt** concierge stub — the CLI `bind` exposes the same choice. Optional role-authorization-cred check at bind time. |
 
 ## 11. Out of scope (restated)
 
