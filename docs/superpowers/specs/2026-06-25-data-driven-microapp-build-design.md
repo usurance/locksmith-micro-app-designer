@@ -3,7 +3,7 @@
 
 |           |                                                                                                                             |
 | --------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Status    | Draft for review                                                                                                            |
+| Status    | Approved — authoring the Product-Designer template next (§11), then writing-plans                                                                                                            |
 | Date      | 2026-06-25                                                                                                                  |
 | Builds on | `keri_serviceaid` (`~/code/keripy/keri_serviceaid/`) + `concierge-api` (`2026-06-23-concierge-api-local-runtime-design.md`) |
 | Lineage   | `micro-app-runtime` (spec-only/abandoned) → `keri_serviceaid` → **concierge** (current)                                     |
