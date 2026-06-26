@@ -74,7 +74,7 @@ The Risk-Profiler / Premium-Calculation **is a micro-app**: it gets a template; 
 | `header.role` + identity | the ServiceAid's role/AID | the incepted **AID** |
 | `commands[]` | a `@svc.command(route, payload_schema, issues, requires_credential, fn)` registration | — |
 | `commands[].compute` (abstract capability ref) | the command's `fn` | an **ARN** (cloud Lambda) or a **Python entry-point** (local) |
-| `commands[].requires_credential?` (the gate, §4.1) | `requires_credential` → `credgate`/`verify` | required **schema SAID** + issuer/attribute constraints |
+| `commands[].requires?` (authz gate, §4.1) | the chosen authz provider (`authz` / `credgate`) | the method's live values (AID / AID-set / **schema SAID** + constraints) |
 | `credentials.exports[]` | `issues` + `Reply.acdc(edges, rules)` | issued **schema SAID** + edge **SAIDs** |
 | `credentials.imports[]` | inputs the compute expects | their **schema SAIDs** |
 | `rules[]` | reply `rules` / preconditions | — |
@@ -87,17 +87,19 @@ The Risk-Profiler / Premium-Calculation **is a micro-app**: it gets a template; 
 - **C — Loader home:** a **template-aware layer in `concierge-api`**; `keri_serviceaid` stays template-agnostic.
 - **D — Deploy manifest:** a small declarative artifact (role AID, schema SAIDs, compute ARNs/entry-points, OOBIs, gating cred SAIDs, the product manifest SAID) merged with the template by the loader. CDK plugs in here for cloud.
 
-### 4.1 Per-compute credential gate — who may *ask*
+### 4.1 Per-compute authorization gate — who may *ask* (pluggable method)
 
-Each command may declare an optional `requires_credential` (about the **requester**; §4.2 is about the micro-app's *own* identity):
-```
-requires_credential: {
-  schema_said:            <ACDC type the requester must present>,   # deploy-filled
-  issuer?:                <acceptable issuer AID / role>,           # optional constraint
-  attribute_constraints?: { <attr>: <required value/predicate> },  # e.g. status=active, amount>=X
-}
-```
-Enforcement (via `credgate`/`verify`): the requester **presents** the ACDC via IPEX/exn alongside the request; the gate checks schema match, issuer constraint, attribute constraints, and **not-revoked** (TEL); on failure → `Reply(kind="reject")`. The compute `fn` runs only if the gate passes. See §6.2 for the substrate-completion caveat.
+Each command may declare an optional authorization gate (about the **requester**; §4.2 is about the micro-app's *own* identity). The **method is itself data-driven** — a loadable **authz class** (a `keri_serviceaid` provider Protocol: today `authz` for AID-based, `credgate` for credential-based). The template names the method + config; the deploy manifest fills live values; the loader binds the chosen authz provider into the command:
+
+| `requires.method` | Caller must… | Template config | Deploy fills |
+|---|---|---|---|
+| `aid` | be a specific AID | — | the **AID** |
+| `allowlist` | be one of a set of AIDs | — | the **AID set** |
+| `credential` | own/present an ACDC of a required type | `issuer?` / `attribute_constraints?` (e.g. `status=active`, `amount>=X`) | the **schema SAID** |
+
+For `credential`: the requester **presents** the ACDC via IPEX/exn; the gate checks schema match + issuer + attribute constraints + **not-revoked** (TEL). On any method's failure → `Reply(kind="reject")`; the compute `fn` runs only if the gate passes.
+
+The abstraction is the injected authz **provider Protocol**, so new methods (a multisig threshold, a delegation check, or a *composed* `allowlist`-AND-`credential`) are loadable without touching command code. **Status:** `aid`/`allowlist` map to the shipped `authz` provider; `credential` is the partially-deferred presentation gate (§6.2).
 
 ### 4.2 Identity binding — who the micro-app *is* (local vs cloud)
 
@@ -147,7 +149,7 @@ Witness/OOBI config is a parameter (default local demo witnesses with mailboxes;
 A re-runnable **bash script** that proves the *whole* paradigm end-to-end, for an insurance scenario:
 1. Spin up local demo witnesses; `party init` each role's Service-AID.
 2. **Data production:** product-designer issues `coverages`+`metadata` fragments, actuary issues `rating-tables`, rules-author issues `derivation-logic` (each via `ipd` → `said` → `fragment issue` → `grant`); coordinator `admit`s, `assemble`s the manifest, `validate`s, `publish`es.
-3. **Build:** author a micro-app template + a deploy manifest (manifest SAID, AIDs, a compute entry-point, a `requires_credential` gate); `micro-app build` → the loader instantiates the **Risk-Profiler/Premium-Calc Service-AID**.
+3. **Build:** author a micro-app template + a deploy manifest (manifest SAID, AIDs, a compute entry-point, an authz gate — e.g. `method: credential`); `micro-app build` → the loader instantiates the **Risk-Profiler/Premium-Calc Service-AID**.
 4. **Run gated compute:** an authorized requester presents the gating credential and `call`s "calculate premium"; assert the gate passes, the compute runs on the published product data, and the **result is signed by the micro-app's AID**. Assert an *unauthorized* call is **rejected**.
 
 Assertions via exit codes / `grep`; hermetic (temp keystores; cleaned up). Insurance lives only here.
