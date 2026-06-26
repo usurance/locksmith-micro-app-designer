@@ -157,7 +157,7 @@ This **replaces semver as the *identity***. SAID and semver answer different que
 | *Which exact build?* (identity) | the **lockfile SAID** |
 | *Which is newer?* (ordering) | the role AID's **KEL sequence number** (the anchoring `ixn`'s `sn`) |
 | *Lineage* | a **`supersedes` edge** between build lockfiles |
-| *Compatible?* | exact **schema-SAID match** (binary, unforgeable) + ACDC-native evolution (§5.1) — not a semver *promise* |
+| *Compatible?* | exact **schema-SAID match** (binary, unforgeable); cross-version interop is an explicit EGF/consumer acceptance decision (§5.1) — not a semver *promise* and not an automatic substrate bridge |
 
 Human `version` strings survive **only** as non-normative domain labels where humans need them (e.g. a regulatory filing label) — never as the build's identity. **Anchor the lockfile SAID into issued ACDCs** (the ecosystem's `product_version_said` field is exactly this) so every signed result carries provenance — *which build computed it*.
 
@@ -178,15 +178,19 @@ When several parties co-produce one Responsibility's inputs, assembly is generic
 
 Schema SAIDs are the concept identifiers (one per concept, everywhere — exactly what makes import & composition work). Fragments/manifest are shaped to be **representable as designer `credentials.exports` (+ envelope edges)** so the template-gen path is natural — but we don't modify the designer.
 
-### 5.1 Schema evolution — ACDC-native, not bespoke migration
+### 5.1 Schema evolution — explicit, governed acceptance (not an automatic substrate bridge)
 
-Evolving a concept's schema is **not** a data-migration problem here; the substrate provides the mechanism (per ACDC design). Three layers, *used* — not reinvented:
+Verified against the normative ACDC spec (`draft-ssmith-acdc`) + keripy. A few things are true; one tempting shortcut is **not**:
 
-- **SAID = the normative version.** A schema's `$id` SAID *is* its version; the human `version` field is non-normative (confirms §4.4).
-- **Evolve by composition, not modification.** A *new* schema (new SAID) `oneOf`-accepts the older shape(s); you never alter a published SAID. Edges (`s` field) may reference a prior version for lineage. ⇒ **a v2 micro-app `oneOf`-accepts v1-era credentials and reads them natively — so parallel deploy (Principle 4) needs no migration.**
-- **Acceptance/trust by adoption, not provenance.** An **Ecosystem Governance Framework (EGF)** publishes the *set of acceptable schema SAIDs*; validators check presented credentials against it. Trust accrues through **abundant adoption** (a widely-used SAID becomes a de-facto standard); issuer provenance is at most a signal, never a gate. *(Authenticity of a specific credential **instance** is always verified via KERI — that is separate and unconditional.)*
+- **A schema SAID is an immutable cryptographic identity.** A revised schema is a *new* SAID = a *distinct type*. (The human `version` annotation in a schema is ecosystem convention, not normative; the ACDC `v` field *is* normative.)
+- **The protocol does NOT auto-bridge versions.** There is no normative mechanism by which a new schema `oneOf`-accepts an older one, and an edge's `s` MUST equal the far node's schema SAID **exactly** (§9.1.4 — no version tolerance). `oneOf` in ACDC is for compact-vs-expanded *disclosure of the same schema* (§3.6), not cross-version compatibility; §3.3 mandates **static, SAID-immutable schemas**.
+- **Compatibility is therefore an explicit, governed decision — not free.** A micro-app / ecosystem declares the **set of schema SAIDs it accepts** (an **EGF acceptable-SAID set** — an informational governance pattern, not a protocol requirement) and its consumer logic handles each accepted shape. So **a v2 micro-app reads v1-era credentials because it *explicitly accepts* v1's schema SAID** — config + a consumer branch, *not* an automatic substrate feature.
+- **Trust by adoption.** Within that acceptable-set, trust accrues to a SAID through *abundant use* (a widely-adopted SAID becomes a de-facto standard); issuer provenance is at most a signal, never a gate.
+- **Instance authenticity is always verified** via KERI (schema-SAID match + issuer KEL + TEL non-revocation) — separate and unconditional.
 
-**Residual work** (small, bounded): forward-compat is **opt-in** — a v2 author must include the `oneOf` bridge (else it is a *fork*, not an evolution); and the **EGF acceptable-SAID set** is a real artifact (a deploy/ecosystem input — §4 manifest). *[Specific rules — e.g. automatic minor-version tolerance — pending verification against the normative ACDC spec.]*
+**So hole #1 is bounded, not eliminated:** cross-version interop is the *consumer's explicit responsibility* (accept the old SAID + handle its shape via the acceptable-set) — real work, but config + a branch, not a data migration. The throw-away / parallel-deploy model (Principle 4) still holds because *data* never migrates; only the consumer's accepted-SAID set grows.
+
+> **Verification note:** an LLM-RAG initially suggested automatic `oneOf` cross-version composition, edge-`s` version tolerance, and auto minor-version tolerance. Checked against `draft-ssmith-acdc` (§3.3 static/immutable schemas; §9.1.4 exact edge-`s` match; §3.6 `oneOf` = disclosure forms) + keripy: those are **not** spec-supported. Only the EGF acceptable-SAID *pattern* survives, and it is informational, not a MUST.
 
 ## 6. The two substrate items (only `keri_serviceaid` changes)
 
