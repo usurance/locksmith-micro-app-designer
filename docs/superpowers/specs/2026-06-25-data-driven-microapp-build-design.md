@@ -30,7 +30,7 @@ Four principles that resolve prior confusion:
 - **Per-compute authorization gate** — each command's optional, **pluggable** authz *method* (`aid` / `allowlist` / `credential`), data-driven (§4.1).
 - **Two substrate items** (the only `keri_serviceaid` changes — both **domain-agnostic**): **registry-targeting + revoke** (§6.1) and **completing the credential-presentation authz method** (§6.2).
 - **ACDC sourcing & assembly (collaborative authoring)** — the ACDCs a micro-app traffics in, **authored / imported / derived**, IPEX-exchanged and (where co-produced) coordinator-assembled into a **manifest ACDC** (§5). `ipd` is the insurance test's deterministic SAD source — one source, not the model. The resulting SAIDs are deploy-data inputs.
-- **Local schema availability on load** — register the micro-app's schemas into the local KERI store and make them resolvable to direct peers (KERI **direct mode**); global OOBI publishing is **deferred** (§5.2).
+- **Local schema availability on load** — register the micro-app's schemas into the local KERI store; counterparties resolve via **data OOBI** from a local/pre-shared source (no global host, no KERI node serves schemas); global publishing is **deferred** (§5.2).
 - **CLIs** — `said` (saidify) and `micro-app` (drive the loader + the authoring flow) — thin over the Qt-free authoring/loader library.
 - **A bash multi-party integration test** as the acceptance criterion (§8), against local demo witnesses (swappable to the federation).
 
@@ -193,14 +193,14 @@ Verified against the normative ACDC spec (`draft-ssmith-acdc`) + keripy. A few t
 
 > **Verification note:** an LLM-RAG initially suggested automatic `oneOf` cross-version composition, edge-`s` version tolerance, and auto minor-version tolerance. Checked against `draft-ssmith-acdc` (§3.3 static/immutable schemas; §9.1.4 exact edge-`s` match; §3.6 `oneOf` = disclosure forms) + keripy: those are **not** spec-supported. Only the EGF acceptable-SAID *pattern* survives, and it is informational, not a MUST.
 
-### 5.2 Schema availability on load — local / direct mode (global publishing deferred)
+### 5.2 Schema availability on load — local (no global host required)
 
-For a micro-app's commands to validate the credentials it traffics in, its schemas must be **resolvable**. This build does that **locally**, in **KERI direct mode**:
+For a micro-app's commands to validate the credentials it traffics in, its schemas must be **resolvable** — and schemas are a **separate plane** from the event/IPEX channel: keripy nodes *resolve and cache* schemas via **data OOBI** (`app/oobiing.py`), they do **not** *serve* them, and a schema never travels over a direct peer connection. In a local / direct-mode (peer) deployment this needs **no global infra**:
 
-- **On load (the local / Locksmith path), the loader registers the micro-app's schemas into the local KERI schema store** (`db.schema` via `Schemer` — the same SAID-verified pin keripy uses on OOBI resolution, `app/oobiing.py`). The Service-AID can then validate immediately.
-- **Counterparties resolve them point-to-point** over Locksmith's already-shipped **peer-mode (direct TCP) transport** — no witnesses, no globally-reachable endpoint. Schema availability is scoped to the wallet's direct peers (and, for the §8 test, the local demo setup).
+- **On load, the loader registers the micro-app's schemas into the local KERI store** (`db.schema` via `Schemer` — the SAID-verified pin keripy uses on data-OOBI resolution). The Service-AID validates immediately.
+- **A counterparty obtains the schema** either by **pre-loading the same template** or by **resolving its data OOBI from a reachable host** — locally a localhost/LAN endpoint (for the §8 test, the local setup). The event/credential exchange itself is the direct peer channel; the schema is fetched/shared **out-of-band**, trustless via SAID.
 
-This is the **local counterpart** of a global *Micro-App EGF Publisher* — which would serve schemas at a world-reachable OOBI (e.g. `egf.keri.host/oobi/<said>`) so *any* EGF can pull them in. That **universal / indirect-mode publishing is deferred** to its own brainstorm (`backlog/2026-06-26-egf-publisher-and-schema-discovery.md`); Phase 1 ships only the local/direct path. Same load-time *step*, two reach scopes: **direct (local, now)** vs **published (global, later)**.
+This is the **local counterpart** of a global *Micro-App EGF Publisher* — a stranger-reachable schema host (e.g. `egf.keri.host/oobi/<said>`) so *any* EGF can pull schemas in. Note: **KERI nodes (witnesses/wallets) do not host schemas**; the host is a plain (untrusted, SAID-verified) HTTP endpoint, optionally advertised via an AID's `loc`/`end` **schema** role. That **universal publishing is deferred** (`backlog/2026-06-26-egf-publisher-and-schema-discovery.md`); Phase 1 ships only the local path. Same load-time *step*, two reach scopes: **local (now)** vs **published (global, later)**.
 
 ## 6. The two substrate items (only `keri_serviceaid` changes)
 

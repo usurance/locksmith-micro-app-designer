@@ -17,6 +17,13 @@ The open question is **where do they get published**, and by what service.
 - **Two distinct OOBIs — don't conflate:** (a) the **schema OOBI** (publish the schema JSON, trustless via SAID) — the focus here; (b) the micro-app **Service-AID's own AID OOBI** (reachability/endpoints, published via witnesses + `loc`/`end` reply messages) — related, separate.
 - **Research pointers for the next pass:** `keria` (agent server — how its agents resolve/host schema OOBIs) and `signify` (client resolution); the `keri.host` infra (S3/CloudFront/Route53 already in play for releases) as a hosting substrate.
 
+## Cleared misconceptions (verified in keripy)
+
+- **KERI nodes do not *serve* schemas — they only *resolve & cache* them.** `app/oobiing.py` fetches a data OOBI and pins the `Schemer` into `db.schema`; there is **no schema-serving route** in keripy. A witness serves `/`, `/receipts`, `/query` (`app/indirecting.py`), **not** schemas. So the schema host is a plain HTTP server (vLEI-server pattern), **not** a witness/wallet/watcher — trustless because the SAID self-verifies the bytes.
+- **A Registry is NOT a schema host, and NOT a separate infra tier.** A registry is a status **TEL** (`vcp`/`iss`/`rev`, `keri/vdr/`) anchored to the issuer AID's KEL and receipted by **backers** (`baks`, often the same witnesses). It tracks credential *status*, is schema-agnostic, and rides the AID's existing infra — there is **no `registry.keri.host` service**, and it has nothing to do with schemas.
+- **A wallet in direct mode does not "host" schemas to the network.** Both peers must already have the schema (pre-loaded from the template, or resolved out-of-band via data OOBI). Direct mode carries KEL/receipts + IPEX, not schema bytes.
+- **Discovery glue:** an AID can advertise *where* its schemas are served via a `loc`/`end` endpoint with role **`schema`** (`db/basing.py` — "Routes such as /end/role /loc/schema"); the serving is still done by whatever HTTP host is at that location.
+
 ## Proposed shape (to brainstorm, not decided)
 
 - A **"Micro-App EGF Publisher" service** — plausibly itself a **Service-AID / global-utility micro-app** — that, on micro-app load/setup, **publishes the micro-app's schemas** (and possibly an EGF-component declaration: the acceptable-SAID set it contributes, the Service-AID OOBI, governance metadata) at OOBI-resolvable endpoints.
