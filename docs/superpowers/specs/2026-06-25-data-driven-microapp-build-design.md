@@ -16,7 +16,7 @@ Make **app-building data-driven**: an AI (or a person) authors a declarative **m
 Three principles that resolve prior confusion:
 
 1. **Template ⊥ Runtime.** The **micro-app template** is the *data/DSL* (authored via `/micro-app-template-gen`). The **Service-AID/concierge** is the *runtime* that executes it. The **loader** is the bridge — and it is *central*, not deferrable.
-2. **One micro-app = one Role × one Responsibility**, executed as **one Service-AID** (one AID embodying the role — §4.2; one gated capability, one signed result). A Role's *full* behavior takes **many** micro-apps. **Cross-micro-app / cross-AID composition is the *ecosystem* layer** (the ecosystem viewer), not something inside one micro-app.
+2. **One micro-app = one Role × one Responsibility = one role *identity* (AID).** That identity is *realized* as **one or more Service-AID deployments** (a command handler now; aggregate / projection compute in Phase 2 — §4.3), which **normally share the one role AID** (optionally with a cloud-provisioned *delegated supporting* AID). So **Service-AID = the deployment unit; the AID = the identity anchor** that unifies them. A Role's *full* behavior takes **many** micro-apps; **cross-micro-app / cross-AID composition is the *ecosystem* layer** (the ecosystem viewer), not something inside one micro-app.
 3. **ACDCs are the currency; most are authored or imported, not generated.** Of the template's **8 primitives**, ACDCs enter through **`credentials`** — `exports` declare the ACDC types this role *issues*, `imports` the types it must *hold* — while **`commands`/`reactions`/`workflows`** move them via **IPEX** (grant / admit) by *referencing* credential ids; `header`, `role`, `aggregates`, `projections`, and `rules` are **pure configuration**. The template concerns itself with *ACDCs* — their schema SAIDs and IPEX flow — not any one data format. ACDCs are sourced three ways: **authored** (by `/micro-app-template-gen`, the default), **imported** from other ecosystems (they are just SAIDs — the composability win: snap an existing concept onto your context), or **derived** from a deterministic pre-ACDC (SAD) source. *Only novel services invent new ACDCs; mature ecosystems are assembled from existing ones.*
 
 *Example (insurance — the only domain we touch, and only as the §8 test scenario):* a **Product Designer** role's *Manage Insurance Product* responsibility is one micro-app whose **commands** include `sandbox` and `publish` (creating / releasing product versions); a **Rating Engine** role's *Calculate Premium* responsibility is another. Each gets a template; the loader configures its Service-AID. Those commands traffic in **ACDCs** — the Product is an ACDC, the sandbox *result* is an ACDC — and `ipd` is just *one* (insurance-specific, deterministic) **SAD source** feeding some of them. **`sandbox`/`publish` are domain commands of a template — never features of this generic spec.**
@@ -32,9 +32,11 @@ Three principles that resolve prior confusion:
 - **CLIs** — `said` (saidify) and `micro-app` (drive the loader + the authoring flow) — thin over the Qt-free authoring/loader library.
 - **A bash multi-party integration test** as the acceptance criterion (§8), against local demo witnesses (swappable to the federation).
 
+**Phasing:** Phase 1 (this build) = the **command** Service-AID, end-to-end. Phase 2 (designed in §4.3, built next) = the **aggregate / projection / workflow** Service-AIDs. The loader / deploy-manifest / identity seams are designed for *all* primitives now; only the command facet is *built* now.
+
 **Out of scope (deferred, named):**
 
-- Runtime execution of the *other* micro-app primitives (aggregates/projections/workflows beyond what a single command needs).
+- **Building** the aggregate / projection / workflow Service-AIDs *now* — their runtime is **designed in §4.3** and is the committed **next phase**; this build is command-first.
 - Deep cross-fragment / DAG attribute validation (the `ipd` normalization phase).
 - Production HOA / serverless beyond defining the deploy-manifest seam.
 - **Rewriting the designer plugin** — we *consume* its template output; we don't change the Qt editor.
@@ -81,6 +83,9 @@ Three principles that resolve prior confusion:
 | `commands[]`                                   | a `@svc.command(route, payload_schema, issues, requires_credential, fn)` registration | —                                                                        |
 | `commands[].compute` (abstract capability ref) | the command's `fn`                                                                    | an **ARN** (cloud Lambda) or a **Python entry-point** (local)            |
 | `commands[].requires?` (authz gate, §4.1)      | the chosen authz provider (`authz` / `credgate`)                                      | the method's live values (AID / AID-set / **schema SAID** + constraints) |
+| `aggregates[]` *(Phase 2, §4.3)* | an **aggregate** Service-AID — one DSL-driven fold fn for all aggregates | aggregate compute **ARN / entry-point** + AID |
+| `projections[]` *(Phase 2, §4.3)* | a **projection** Service-AID — one DSL-driven fold fn for all projections | projection compute **ARN / entry-point** + AID |
+| `workflows[]` *(Phase 2, §4.3)* | orchestration across command/aggregate/projection + counterparties | — |
 | `credentials.exports[]`                        | `issues` + `Reply.acdc(edges, rules)`                                                 | issued **schema SAID** + edge **SAIDs**                                  |
 | `credentials.imports[]`                        | inputs the compute expects                                                            | their **schema SAIDs**                                                   |
 | `rules[]`                                      | precondition / constraint clauses (`rule_ref`ed across the template) — **config, not ACDC content**                                                         | —                                                                        |
@@ -125,6 +130,19 @@ The micro-app's **own** AID (the role's signing identity) is resolved **differen
   This setup is **transient and non-revisitable**; it runs *before* `load(template, deploy)`, and the bound AID then fills the deploy manifest's role-AID slot.
 
 **Optional role-authorization credential:** the chosen AID may be required to hold a credential authorizing it to act in the role (an authz check on the micro-app's *own* identity — "this AID may *be* a Rating Engine"), verified at bind time. Distinct from §4.1's per-request gate.
+
+### 4.3 Compute topology — one template, one-or-more Service-AIDs
+
+A micro-app template (one Role × one Responsibility) compiles to **one or more Service-AID deployments**, each a *gated compute facet* of the same role identity:
+
+- **Command Service-AID** *(Phase 1 — this build)* — handles exn commands, runs the per-command `fn`, issues ACDCs.
+- **Aggregate Service-AID** *(Phase 2)* — folds the role's event stream into state. **Not arbitrary compute:** ONE function for *all* aggregates, **driven by the `aggregates` DSL**, with extension points where a specific aggregate needs them.
+- **Projection Service-AID** *(Phase 2)* — folds streams into read-side views; likewise **one function for all projections**, driven by the `projections` DSL.
+- **Workflows** *(Phase 2)* — orchestrate across the above (and counterparties).
+
+These are like the concierge-api *arbitrary-compute* Service-AID, but **conform to their config** rather than running arbitrary code — the "AI just *configures* the app (business rules in the DSL)" thesis carried to every primitive.
+
+**Identity:** the deployments **normally share the one role AID** (co-located facets of one identity); optionally the cloud provisions a **delegated supporting AID** for a given compute. Either way the **deploy manifest binds each primitive's compute** (ARN / entry-point) and its AID — the *same* loader seam as commands (Decision B). So *Service-AID* is the **deployment unit**, the **AID is the identity anchor**: this refines Principle 2 without violating it.
 
 ## 5. ACDC sourcing & assembly (the input, not the center)
 
@@ -188,7 +206,7 @@ Assertions via exit codes / `grep`; hermetic (temp keystores; cleaned up). `sand
 | Registry targeting + revoke      | **Substrate item §6.1** — small, domain-agnostic; insurance `sandbox`/`publish` are template commands that use it.                                                                                                                                                                                          |
 | Credential-presentation gate       | **Substrate item §6.2** — slot exists; presentation-verify path partially deferred (Gated-Retrieval).                                                                                                                                                 |
 | Compute as ARN vs entry-point      | **Decision B** — abstract in template; deploy binds; runtime-agnostic.                                                                                                                                                                                |
-| Multi-role party                   | **Non-issue** — one Service-AID per role; a dual-role party runs two.                                                                                                                                                                                 |
+| Multi-role party                   | **Resolved (§4.3)** — one micro-app = one role *identity* realized as one-or-more Service-AID deployments (shared AID); a party in two roles runs two micro-apps.                                                                                                                                                                                 |
 | Designer↔runtime                   | **The loader IS the bridge** (symbolic→live resolution); designer plugin **not** rewritten — we consume its template.                                                                                                                                 |
 | Qt entanglement in concierge-api   | **None** — core Qt-free; `pages/` is a stub.                                                                                                                                                                                                          |
 | Micro-app's own AID binding (§4.2) | Cloud = auto-incept at deploy (Secrets Manager keeper, exists). Local = one-time first-open setup; `AidSelectorPage` is the **unbuilt** concierge stub — the CLI `bind` exposes the same choice. Optional role-authorization-cred check at bind time. |
@@ -196,4 +214,4 @@ Assertions via exit codes / `grep`; hermetic (temp keystores; cleaned up). `sand
 
 ## 11. Out of scope (restated)
 
-Other-primitive runtime, deep DAG validation, production HOA/serverless, designer-plugin rewrite. Authoring the actual template (via `/micro-app-template-gen`, in `~/code/ugard`) is the **next step after this loader contract is approved** — authored *against* this contract.
+Building (not designing) the Phase-2 aggregate/projection/workflow Service-AIDs (designed in §4.3), deep DAG validation, production HOA/serverless, designer-plugin rewrite. Authoring the actual template (via `/micro-app-template-gen`, in `~/code/ugard`) is the **next step after this loader contract is approved** — authored *against* this contract.
