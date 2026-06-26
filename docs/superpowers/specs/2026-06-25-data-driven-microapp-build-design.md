@@ -1,11 +1,13 @@
 # Data-Driven Micro-App Build — Template → Service-AID Loader — Design Spec
 
-| | |
-|---|---|
-| Status | Draft for review |
-| Date | 2026-06-25 |
+
+|           |                                                                                                                             |
+| --------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Status    | Draft for review                                                                                                            |
+| Date      | 2026-06-25                                                                                                                  |
 | Builds on | `keri_serviceaid` (`~/code/keripy/keri_serviceaid/`) + `concierge-api` (`2026-06-23-concierge-api-local-runtime-design.md`) |
-| Lineage | `micro-app-runtime` (spec-only/abandoned) → `keri_serviceaid` → **concierge** (current) |
+| Lineage   | `micro-app-runtime` (spec-only/abandoned) → `keri_serviceaid` → **concierge** (current)                                     |
+
 
 ## 1. Goal & organizing principles
 
@@ -14,21 +16,23 @@ Make **app-building data-driven**: an AI (or a person) authors a declarative **m
 Two principles that resolve prior confusion:
 
 1. **Template ⊥ Runtime.** The **micro-app template** is the *data/DSL* (authored via `/micro-app-template-gen`). The **Service-AID/concierge** is the *runtime* that executes it. The **loader** is the bridge — and it is *central*, not deferrable.
-2. **One micro-app = one role = one AID = one Service-AID** (one gated function, one signed result). **Cross-AID composition is the *ecosystem* layer** (the ecosystem viewer), not something inside one micro-app.
+2. **One micro-app = one Role × one Responsibility**, executed as **one Service-AID** (one AID embodying the role — §4.2; one gated capability, one signed result). A Role's *full* behavior takes **many** micro-apps. **Cross-micro-app / cross-AID composition is the *ecosystem* layer** (the ecosystem viewer), not something inside one micro-app.
 
-The Risk-Profiler / Premium-Calculation **is a micro-app**: it gets a template; the loader configures a Service-AID; the `ipd` product data is what that micro-app's compute consumes.
+*Example (insurance — the only domain we touch, and only as the §8 test scenario):* a **Product Designer** role's *Manage Insurance Product* responsibility is one micro-app whose **commands** include `sandbox` and `publish` (creating / releasing product versions); a **Rating Engine** role's *Calculate Premium* responsibility is another. Each gets a template; the loader configures its Service-AID; the `ipd` product data is what the compute consumes. **`sandbox`/`publish` are domain commands of a template — never features of this generic spec.**
 
 ## 2. Scope
 
 **In scope:**
+
 - **The loader** — `load(template, deploy_data) -> ServiceAid`: a *template-aware* layer that instantiates a `keri_serviceaid` `ServiceAid` (commands + providers) from a template + deploy manifest. (This subsumes the earlier "designer→runtime bridge": resolving template symbolic refs → live SAIDs *is* the loader's job.)
-- **Per-compute credential gate** — each command's optional `requires_credential` (the ACDC a requester must present), data-driven.
-- **Two substrate items** (the only `keri_serviceaid` changes): the **Publish/Sandbox TEL lifecycle** (§6.1) and **completing the credential-presentation gate** (§6.2).
+- **Per-compute authorization gate** — each command's optional, **pluggable** authz *method* (`aid` / `allowlist` / `credential`), data-driven (§4.1).
+- **Two substrate items** (the only `keri_serviceaid` changes — both **domain-agnostic**): **registry-targeting + revoke** (§6.1) and **completing the credential-presentation authz method** (§6.2).
 - **Data production (collaborative authoring)** — `ipd` → files → fragment ACDCs → IPEX → a coordinator-assembled **manifest ACDC** (§5). The manifest SAID is a deploy-data input the micro-app consumes.
 - **CLIs** — `said` (saidify) and `micro-app` (drive the loader + the authoring flow) — thin over the Qt-free authoring/loader library.
 - **A bash multi-party integration test** as the acceptance criterion (§8), against local demo witnesses (swappable to the federation).
 
 **Out of scope (deferred, named):**
+
 - Runtime execution of the *other* micro-app primitives (aggregates/projections/workflows beyond what a single command needs).
 - Deep cross-fragment / DAG attribute validation (the `ipd` normalization phase).
 - Production HOA / serverless beyond defining the deploy-manifest seam.
@@ -61,7 +65,7 @@ The Risk-Profiler / Premium-Calculation **is a micro-app**: it gets a template; 
    Local: concierge-api BindingController/RuntimePumpDoer (vault)   |   Cloud: CDK + Lambda
 ```
 
-**Homes:** the **loader + authoring lib + CLIs** live in **`concierge-api`** (`src/concierge_api_local/{loader,authoring}/` + `cli/`); reuse `keri_serviceaid`; the **template** lives in **`~/code/ugard`**; this spec lives in the designer repo's `docs/superpowers/specs/` (curated home for runtime design). `keri_serviceaid` stays **template-agnostic** (its own design decision); the loader is the template-aware sugar on top.
+**Homes:** the **loader + authoring lib + CLIs** live in `**concierge-api`** (`src/concierge_api_local/{loader,authoring}/` + `cli/`); reuse `keri_serviceaid`; the **template** lives in `**~/code/ugard`**; this spec lives in the designer repo's `docs/superpowers/specs/` (curated home for runtime design). `keri_serviceaid` stays **template-agnostic** (its own design decision); the loader is the template-aware sugar on top.
 
 ## 4. The loader (the core)
 
@@ -69,19 +73,22 @@ The Risk-Profiler / Premium-Calculation **is a micro-app**: it gets a template; 
 
 **The mapping (data-driven app build):**
 
-| Template field (DSL) | Drives in `keri_serviceaid` | Deploy manifest fills |
-|---|---|---|
-| `header.role` + identity | the ServiceAid's role/AID | the incepted **AID** |
-| `commands[]` | a `@svc.command(route, payload_schema, issues, requires_credential, fn)` registration | — |
-| `commands[].compute` (abstract capability ref) | the command's `fn` | an **ARN** (cloud Lambda) or a **Python entry-point** (local) |
-| `commands[].requires?` (authz gate, §4.1) | the chosen authz provider (`authz` / `credgate`) | the method's live values (AID / AID-set / **schema SAID** + constraints) |
-| `credentials.exports[]` | `issues` + `Reply.acdc(edges, rules)` | issued **schema SAID** + edge **SAIDs** |
-| `credentials.imports[]` | inputs the compute expects | their **schema SAIDs** |
-| `rules[]` | reply `rules` / preconditions | — |
-| witness/OOBI | `LocalRuntime` / witness config | demo or **federation OOBIs** |
-| product-data ref (`ipd`/manifest) | data the compute `fn` reads | the **manifest SAID** / content SADs |
+
+| Template field (DSL)                           | Drives in `keri_serviceaid`                                                           | Deploy manifest fills                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `header.role` + identity                       | the ServiceAid's role/AID                                                             | the incepted **AID**                                                     |
+| `commands[]`                                   | a `@svc.command(route, payload_schema, issues, requires_credential, fn)` registration | —                                                                        |
+| `commands[].compute` (abstract capability ref) | the command's `fn`                                                                    | an **ARN** (cloud Lambda) or a **Python entry-point** (local)            |
+| `commands[].requires?` (authz gate, §4.1)      | the chosen authz provider (`authz` / `credgate`)                                      | the method's live values (AID / AID-set / **schema SAID** + constraints) |
+| `credentials.exports[]`                        | `issues` + `Reply.acdc(edges, rules)`                                                 | issued **schema SAID** + edge **SAIDs**                                  |
+| `credentials.imports[]`                        | inputs the compute expects                                                            | their **schema SAIDs**                                                   |
+| `rules[]`                                      | reply `rules` / preconditions                                                         | —                                                                        |
+| witness/OOBI                                   | `LocalRuntime` / witness config                                                       | demo or **federation OOBIs**                                             |
+| product-data ref (`ipd`/manifest)              | data the compute `fn` reads                                                           | the **manifest SAID** / content SADs                                     |
+
 
 **Decisions:**
+
 - **A — Resolution time:** **deploy/startup.** Template is static; the deploy manifest injects live data; the loader builds the `ServiceAid` (local: at vault startup via `BindingController`; cloud: at CDK deploy). The **role AID is bound just before this** (§4.2): cloud auto-incepts at deploy; local binds via the one-time first-open setup.
 - **B — Compute reference:** the template names compute **abstractly** (capability id + payload/issue schemas); the deploy manifest **binds** it to an **ARN** (cloud) or a **Python entry-point** (local) — the same template runs in either runtime.
 - **C — Loader home:** a **template-aware layer in `concierge-api`**; `keri_serviceaid` stays template-agnostic.
@@ -91,11 +98,13 @@ The Risk-Profiler / Premium-Calculation **is a micro-app**: it gets a template; 
 
 Each command may declare an optional authorization gate (about the **requester**; §4.2 is about the micro-app's *own* identity). The **method is itself data-driven** — a loadable **authz class** (a `keri_serviceaid` provider Protocol: today `authz` for AID-based, `credgate` for credential-based). The template names the method + config; the deploy manifest fills live values; the loader binds the chosen authz provider into the command:
 
-| `requires.method` | Caller must… | Template config | Deploy fills |
-|---|---|---|---|
-| `aid` | be a specific AID | — | the **AID** |
-| `allowlist` | be one of a set of AIDs | — | the **AID set** |
-| `credential` | own/present an ACDC of a required type | `issuer?` / `attribute_constraints?` (e.g. `status=active`, `amount>=X`) | the **schema SAID** |
+
+| `requires.method` | Caller must…                           | Template config                                                          | Deploy fills        |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------------ | ------------------- |
+| `aid`             | be a specific AID                      | —                                                                        | the **AID**         |
+| `allowlist`       | be one of a set of AIDs                | —                                                                        | the **AID set**     |
+| `credential`      | own/present an ACDC of a required type | `issuer?` / `attribute_constraints?` (e.g. `status=active`, `amount>=X`) | the **schema SAID** |
+
 
 For `credential`: the requester **presents** the ACDC via IPEX/exn; the gate checks schema match + issuer + attribute constraints + **not-revoked** (TEL). On any method's failure → `Reply(kind="reject")`; the compute `fn` runs only if the gate passes.
 
@@ -106,7 +115,7 @@ The abstraction is the injected authz **provider Protocol**, so new methods (a m
 The micro-app's **own** AID (the role's signing identity) is resolved **differently per runtime** and is a configuration input the loader consumes (orthogonal to §4.1 — that is who may *ask*; this is who the micro-app *is*):
 
 - **Cloud:** the role AID is **auto-incepted at deploy** — witnesses + keystore provisioned automatically via the existing per-stack **KMS-encrypted Secrets Manager keeper**. No human input.
-- **Local:** the user binds the AID via a **one-time, first-open setup step** — the concierge plugin's **`AidSelectorPage`** (currently an unbuilt stub) or, for the CLI path, a `build`/`bind` flag — choosing one of:
+- **Local:** the user binds the AID via a **one-time, first-open setup step** — the concierge plugin's `**AidSelectorPage`** (currently an unbuilt stub) or, for the CLI path, a `build`/`bind` flag — choosing one of:
   - **use an existing AID** they control (e.g. one already holding a credential authorizing it to *act as* the role),
   - **use their own AID** (if it is so authorized), or
   - **create a fresh AID** for the role.
@@ -128,17 +137,19 @@ Schema SAIDs are the concept identifiers (one schema SAID per fragment type, eve
 
 ## 6. The two substrate items (only `keri_serviceaid` changes)
 
-### 6.1 Publish/Sandbox TEL lifecycle
-`assemble_manifest` issues the manifest into a **Sandbox** registry (revocable/purgeable). A separate **`publish_manifest`** command issues it into a **dedicated "published" registry whose entries are never revoked** (immutability by policy; v1 — an immutable in-TEL state flag is deferred). Needs one small extension: a reply path that targets a specific registry and, for Sandbox, can `Registry.revoke`.
+### 6.1 Registry targeting + revoke (generic)
+
+Today a command reply single-issues into the ServiceAid's default registry. A command may need to (a) issue into a **named** registry and (b) **revoke** a prior credential — a small, **domain-agnostic** `keri_serviceaid` extension (a reply path that targets a chosen registry / can `Registry.revoke`). *Domain lifecycle commands rely on this* — e.g. an insurance **Product-Designer** micro-app's `sandbox`/`publish` commands (sandbox → a revocable registry; publish → an immutable-by-policy registry) — but those **lifecycle semantics live in that template's commands, not here.**
 
 ### 6.2 Complete the credential-presentation gate
+
 The slot exists (`Command.requires_credential`, `credgate`/`verify`, `CredentialReq`), but the full **present → verify-against-`required_schema` → admit-and-check** path is the partially-deferred Gated-Retrieval item (allowlist gating works; credential-presentation gating is incomplete). Completing it is the second (small) substrate change.
 
 ## 7. CLIs (thin, over the loader + authoring libs)
 
-- **`said`** — `said saidify <file> [--ndjson]` (wraps keripy saidify).
-- **`micro-app`** — verbs over the loader + authoring lib:
-  - Data production: `party init`, `fragment issue`, `grant`, `admit`, `assemble`, `validate`, `publish`.
+- `**said`** — `said saidify <file> [--ndjson]` (wraps keripy saidify).
+- `**micro-app**` — verbs over the loader + authoring lib:
+  - Data production (generic composition): `party init`, `fragment issue`, `grant`, `admit`, `assemble`, `validate`. *(Domain lifecycle such as `sandbox`/`publish` are template **commands** run via `call`, not generic verbs.)*
   - Identity binding (local, §4.2): `bind [--aid <existing> | --use-own | --create-aid] [--require-role-cred <said>]` → choose/create the micro-app's own AID (the CLI equivalent of the `AidSelectorPage`).
   - Loader/build: `build --template <t> --deploy <d>` → instantiate (and, locally, run) a Service-AID from the template + deploy manifest (using the bound AID); `call <route>` to exercise a command (presenting a gating credential if required).
 
@@ -146,31 +157,34 @@ Witness/OOBI config is a parameter (default local demo witnesses with mailboxes;
 
 ## 8. Integration test (acceptance criterion)
 
-A re-runnable **bash script** that proves the *whole* paradigm end-to-end, for an insurance scenario:
-1. Spin up local demo witnesses; `party init` each role's Service-AID.
-2. **Data production:** product-designer issues `coverages`+`metadata` fragments, actuary issues `rating-tables`, rules-author issues `derivation-logic` (each via `ipd` → `said` → `fragment issue` → `grant`); coordinator `admit`s, `assemble`s the manifest, `validate`s, `publish`es.
-3. **Build:** author a micro-app template + a deploy manifest (manifest SAID, AIDs, a compute entry-point, an authz gate — e.g. `method: credential`); `micro-app build` → the loader instantiates the **Risk-Profiler/Premium-Calc Service-AID**.
-4. **Run gated compute:** an authorized requester presents the gating credential and `call`s "calculate premium"; assert the gate passes, the compute runs on the published product data, and the **result is signed by the micro-app's AID**. Assert an *unauthorized* call is **rejected**.
+A re-runnable **bash script** that proves the *whole* paradigm end-to-end, for an insurance scenario (the only place insurance appears):
 
-Assertions via exit codes / `grep`; hermetic (temp keystores; cleaned up). Insurance lives only here.
+1. Spin up local demo witnesses; `bind` / `party init` each role's Service-AID.
+2. **Data production (generic):** product-designer issues `coverages`+`metadata` fragments, actuary issues `rating-tables`, rules-author issues `derivation-logic` (each via `ipd` → `said` → `fragment issue` → `grant`); coordinator `admit`s, `assemble`s the manifest, `validate`s.
+3. **Build the Product-Designer micro-app:** author its template + deploy manifest; `micro-app build` → the loader instantiates its Service-AID. Invoke its **`publish` command** (a *template* command) to release a product **version** — exercising the §6.1 registry-targeting path end-to-end.
+4. **Build the Rating-Engine micro-app + run gated compute:** load it; an authorized requester presents the gating credential and `call`s its *Calculate Premium* command; assert the gate passes, the compute runs on the **published** product version, and the **result is signed by the micro-app's AID**. Assert an *unauthorized* call is **rejected**.
+
+Assertions via exit codes / `grep`; hermetic (temp keystores; cleaned up). `sandbox`/`publish`/`calculate` are the *templates'* commands — the machinery under test is domain-agnostic.
 
 ## 9. Testing strategy
 
 - **Bash integration script (primary):** the §8 end-to-end flow — "verify via CLI, out of the code."
-- **`keri_serviceaid.TestRuntime` + `pytest` (units):** the loader's template→ServiceAid mapping (incl. credential-gate wiring), each command function in isolation, the authoring pure functions (SAID determinism, edge-map build, `validate` collision detection).
+- `**keri_serviceaid.TestRuntime` + `pytest` (units):** the loader's template→ServiceAid mapping (incl. credential-gate wiring), each command function in isolation, the authoring pure functions (SAID determinism, edge-map build, `validate` collision detection).
 
 ## 10. Risks & status
 
-| Item | Status |
-|---|---|
-| Manifest edge assembly | **Resolved** — `Reply.edges={name:{cred_said,schema_said}}` supported today. |
-| Publish/Sandbox TEL lifecycle | **Substrate item §6.1** — small `keri_serviceaid` extension. |
-| Credential-presentation gate | **Substrate item §6.2** — slot exists; presentation-verify path partially deferred (Gated-Retrieval). |
-| Compute as ARN vs entry-point | **Decision B** — abstract in template; deploy binds; runtime-agnostic. |
-| Multi-role party | **Non-issue** — one Service-AID per role; a dual-role party runs two. |
-| Designer↔runtime | **The loader IS the bridge** (symbolic→live resolution); designer plugin **not** rewritten — we consume its template. |
-| Qt entanglement in concierge-api | **None** — core Qt-free; `pages/` is a stub. |
+
+| Item                               | Status                                                                                                                                                                                                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manifest edge assembly             | **Resolved** — `Reply.edges={name:{cred_said,schema_said}}` supported today.                                                                                                                                                                          |
+| Registry targeting + revoke      | **Substrate item §6.1** — small, domain-agnostic; insurance `sandbox`/`publish` are template commands that use it.                                                                                                                                                                                          |
+| Credential-presentation gate       | **Substrate item §6.2** — slot exists; presentation-verify path partially deferred (Gated-Retrieval).                                                                                                                                                 |
+| Compute as ARN vs entry-point      | **Decision B** — abstract in template; deploy binds; runtime-agnostic.                                                                                                                                                                                |
+| Multi-role party                   | **Non-issue** — one Service-AID per role; a dual-role party runs two.                                                                                                                                                                                 |
+| Designer↔runtime                   | **The loader IS the bridge** (symbolic→live resolution); designer plugin **not** rewritten — we consume its template.                                                                                                                                 |
+| Qt entanglement in concierge-api   | **None** — core Qt-free; `pages/` is a stub.                                                                                                                                                                                                          |
 | Micro-app's own AID binding (§4.2) | Cloud = auto-incept at deploy (Secrets Manager keeper, exists). Local = one-time first-open setup; `AidSelectorPage` is the **unbuilt** concierge stub — the CLI `bind` exposes the same choice. Optional role-authorization-cred check at bind time. |
+
 
 ## 11. Out of scope (restated)
 
