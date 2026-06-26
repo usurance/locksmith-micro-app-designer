@@ -13,11 +13,12 @@
 
 Make **app-building data-driven**: an AI (or a person) authors a declarative **micro-app template**; a **loader** turns that template + deploy-time data into a configured, running **Service-AID**. The author writes *configuration*, never KERI plumbing — the substrate is already built and working. That is the whole point of the micro-app paradigm.
 
-Three principles that resolve prior confusion:
+Four principles that resolve prior confusion:
 
 1. **Template ⊥ Runtime.** The **micro-app template** is the *data/DSL* (authored via `/micro-app-template-gen`). The **Service-AID/concierge** is the *runtime* that executes it. The **loader** is the bridge — and it is *central*, not deferrable.
 2. **One micro-app = one Role × one Responsibility = one role *identity* (AID).** That identity is *realized* as **one or more Service-AID deployments** (a command handler now; aggregate / projection compute in Phase 2 — §4.3), which **normally share the one role AID** (optionally with a cloud-provisioned *delegated supporting* AID). So **Service-AID = the deployment unit; the AID = the identity anchor** that unifies them. A Role's *full* behavior takes **many** micro-apps; **cross-micro-app / cross-AID composition is the *ecosystem* layer** (the ecosystem viewer), not something inside one micro-app.
 3. **ACDCs are the currency; most are authored or imported, not generated.** Of the template's **8 primitives**, ACDCs enter through **`credentials`** — `exports` declare the ACDC types this role *issues*, `imports` the types it must *hold* — while **`commands`/`reactions`/`workflows`** move them via **IPEX** (grant / admit) by *referencing* credential ids; `header`, `role`, `aggregates`, `projections`, and `rules` are **pure configuration**. The template concerns itself with *ACDCs* — their schema SAIDs and IPEX flow — not any one data format. ACDCs are sourced three ways: **authored** (by `/micro-app-template-gen`, the default), **imported** from other ecosystems (they are just SAIDs — the composability win: snap an existing concept onto your context), or **derived** from a deterministic pre-ACDC (SAD) source. *Only novel services invent new ACDCs; mature ecosystems are assembled from existing ones.*
+4. **Immutable, disposable deployments over a federated system-of-record.** A deployment is never mutated or migrated in place — it is built **immutable** (content-addressed; §4.4), and when it changes a **new build is deployed *beside* the old** for clients to cut over to (old retired). This is viable because the **system-of-record is the federated KERI substrate** (counterparties' KELs/TELs, ACDCs by SAID) — *not* the app's own store — so there is **no app-level data to migrate**. Derived state (aggregates/projections) is **rebuildable** by replaying the federated log. The **durable** things are the *log + the role AID + its keystore + the federated ACDCs*; the **disposable** thing is the compute deployment. (Infra reconciliation, where wanted, is the deploy target's job — §4 Contract.)
 
 *Example (insurance — the only domain we touch, and only as the §8 test scenario):* a **Product Designer** role's *Manage Insurance Product* responsibility is one micro-app whose **commands** include `sandbox` and `publish` (creating / releasing product versions); a **Rating Engine** role's *Calculate Premium* responsibility is another. Each gets a template; the loader configures its Service-AID. Those commands traffic in **ACDCs** — the Product is an ACDC, the sandbox *result* is an ACDC — and `ipd` is just *one* (insurance-specific, deterministic) **SAD source** feeding some of them. **`sandbox`/`publish` are domain commands of a template — never features of this generic spec.**
 
@@ -72,7 +73,7 @@ Three principles that resolve prior confusion:
 
 ## 4. The loader (the core)
 
-**Contract:** `load(template: dict, deploy: DeployManifest) -> ServiceAid` — read a static template + a deploy manifest, resolve symbolic refs to live values, and build a configured `ServiceAid` (its `@svc.command`s + providers) with no handwritten plumbing.
+**Contract:** `load(template: dict, deploy: DeployManifest) -> ServiceAid` — read a static template + a deploy manifest, resolve symbolic refs to live values, and build a configured `ServiceAid` (its `@svc.command`s + providers) with no handwritten plumbing. It is a **pure function** — deterministic (same template + manifest → the same `ServiceAid` config), holding no state of its own. It **does not reconcile**: provisioning, convergence, and teardown belong to the **pluggable deploy target** (CloudFormation/CDK in the cloud; the wallet runtime locally). Re-running `load` recomputes the configuration; the *deployment* is immutable & disposable (Principle 4), not reconciled in place.
 
 **The mapping (data-driven app build):**
 
@@ -100,7 +101,8 @@ Three principles that resolve prior confusion:
 - **A — Resolution time:** **deploy/startup.** Template is static; the deploy manifest injects live data; the loader builds the `ServiceAid` (local: at vault startup via `BindingController`; cloud: at CDK deploy). The **role AID is bound just before this** (§4.2): cloud auto-incepts at deploy; local binds via the one-time first-open setup.
 - **B — Compute reference:** the template names compute **abstractly** (capability id + payload/issue schemas); the deploy manifest **binds** it to an **ARN** (cloud) or a **Python entry-point** (local) — the same template runs in either runtime.
 - **C — Loader home:** a **template-aware layer in `concierge-api`**; `keri_serviceaid` stays template-agnostic.
-- **D — Deploy manifest:** a small declarative artifact (role AID, schema SAIDs, compute ARNs/entry-points, OOBIs, gating cred SAIDs, the product manifest SAID) merged with the template by the loader. CDK plugs in here for cloud.
+- **D — Deploy manifest:** a small declarative artifact (role AID, schema SAIDs, compute ARNs/entry-points + **code digests**, OOBIs, gating cred SAIDs, the **EGF acceptable-SAID set** (§5.1), the product manifest SAID) merged with the template by the loader; the loader emits the **SAID lockfile** (§4.4) identifying the build. CDK plugs in here for cloud.
+- **E — Build lifecycle:** **immutable & disposable** (Principle 4). The loader is a **pure compiler**; builds are SAID-locked (§4.4); a changed build deploys **beside** the prior one (no in-place mutation, no data migration). Reconciliation/teardown is the **deploy target's** concern, never the loader's.
 
 ### 4.1 Per-compute authorization gate — who may *ask* (pluggable method)
 
@@ -144,6 +146,21 @@ These are like the concierge-api *arbitrary-compute* Service-AID, but **conform 
 
 **Identity:** the deployments **normally share the one role AID** (co-located facets of one identity); optionally the cloud provisions a **delegated supporting AID** for a given compute. Either way the **deploy manifest binds each primitive's compute** (ARN / entry-point) and its AID — the *same* loader seam as commands (Decision B). So *Service-AID* is the **deployment unit**, the **AID is the identity anchor**: this refines Principle 2 without violating it.
 
+### 4.4 Build identity & lifecycle — the SAID lockfile (not semver)
+
+A deployed micro-app is identified by a **SAID lockfile**: a `said`-stamped, KEL-anchored record of exactly *what was deployed* — the **template SAID + every imported/authored schema SAID + compute-binding digests** (pin **code digests, not ARN strings**) + witness/OOBI config + the EGF acceptable-SAID set (§5.1). Being content-addressed, the build is **immutable by construction**: any change yields a new lockfile SAID = a new build (Principle 4).
+
+This **replaces semver as the *identity***. SAID and semver answer different questions, and the SAID-native answers are more honest:
+
+| Need | Mechanism |
+| --- | --- |
+| *Which exact build?* (identity) | the **lockfile SAID** |
+| *Which is newer?* (ordering) | the role AID's **KEL sequence number** (the anchoring `ixn`'s `sn`) |
+| *Lineage* | a **`supersedes` edge** between build lockfiles |
+| *Compatible?* | exact **schema-SAID match** (binary, unforgeable) + ACDC-native evolution (§5.1) — not a semver *promise* |
+
+Human `version` strings survive **only** as non-normative domain labels where humans need them (e.g. a regulatory filing label) — never as the build's identity. **Anchor the lockfile SAID into issued ACDCs** (the ecosystem's `product_version_said` field is exactly this) so every signed result carries provenance — *which build computed it*.
+
 ## 5. ACDC sourcing & assembly (the input, not the center)
 
 The ACDCs a micro-app's elements traffic in come from three sources:
@@ -160,6 +177,16 @@ When several parties co-produce one Responsibility's inputs, assembly is generic
 - The resulting **SAIDs are deploy-data inputs** (§4 table) the elements read.
 
 Schema SAIDs are the concept identifiers (one per concept, everywhere — exactly what makes import & composition work). Fragments/manifest are shaped to be **representable as designer `credentials.exports` (+ envelope edges)** so the template-gen path is natural — but we don't modify the designer.
+
+### 5.1 Schema evolution — ACDC-native, not bespoke migration
+
+Evolving a concept's schema is **not** a data-migration problem here; the substrate provides the mechanism (per ACDC design). Three layers, *used* — not reinvented:
+
+- **SAID = the normative version.** A schema's `$id` SAID *is* its version; the human `version` field is non-normative (confirms §4.4).
+- **Evolve by composition, not modification.** A *new* schema (new SAID) `oneOf`-accepts the older shape(s); you never alter a published SAID. Edges (`s` field) may reference a prior version for lineage. ⇒ **a v2 micro-app `oneOf`-accepts v1-era credentials and reads them natively — so parallel deploy (Principle 4) needs no migration.**
+- **Acceptance/trust by adoption, not provenance.** An **Ecosystem Governance Framework (EGF)** publishes the *set of acceptable schema SAIDs*; validators check presented credentials against it. Trust accrues through **abundant adoption** (a widely-used SAID becomes a de-facto standard); issuer provenance is at most a signal, never a gate. *(Authenticity of a specific credential **instance** is always verified via KERI — that is separate and unconditional.)*
+
+**Residual work** (small, bounded): forward-compat is **opt-in** — a v2 author must include the `oneOf` bridge (else it is a *fork*, not an evolution); and the **EGF acceptable-SAID set** is a real artifact (a deploy/ecosystem input — §4 manifest). *[Specific rules — e.g. automatic minor-version tolerance — pending verification against the normative ACDC spec.]*
 
 ## 6. The two substrate items (only `keri_serviceaid` changes)
 
@@ -214,4 +241,4 @@ Assertions via exit codes / `grep`; hermetic (temp keystores; cleaned up). `sand
 
 ## 11. Out of scope (restated)
 
-Building (not designing) the Phase-2 aggregate/projection/workflow Service-AIDs (designed in §4.3), deep DAG validation, production HOA/serverless, designer-plugin rewrite. Authoring the actual template (via `/micro-app-template-gen`, in `~/code/ugard`) is the **next step after this loader contract is approved** — authored *against* this contract.
+Building (not designing) the Phase-2 aggregate/projection/workflow Service-AIDs (designed in §4.3), **infrastructure reconciliation** (owned by the deploy target — CloudFormation/CDK / the wallet runtime; the loader is a pure compiler, §4), deep DAG validation, production HOA/serverless, designer-plugin rewrite. Authoring the actual template (via `/micro-app-template-gen`, in `~/code/ugard`) is the **next step after this loader contract is approved** — authored *against* this contract.
