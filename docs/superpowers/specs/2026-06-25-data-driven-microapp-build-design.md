@@ -13,12 +13,13 @@
 
 Make **app-building data-driven**: an AI (or a person) authors a declarative **micro-app template**; a **loader** turns that template + deploy-time data into a configured, running **Service-AID**. The author writes *configuration*, never KERI plumbing — the substrate is already built and working. That is the whole point of the micro-app paradigm.
 
-Two principles that resolve prior confusion:
+Three principles that resolve prior confusion:
 
 1. **Template ⊥ Runtime.** The **micro-app template** is the *data/DSL* (authored via `/micro-app-template-gen`). The **Service-AID/concierge** is the *runtime* that executes it. The **loader** is the bridge — and it is *central*, not deferrable.
 2. **One micro-app = one Role × one Responsibility**, executed as **one Service-AID** (one AID embodying the role — §4.2; one gated capability, one signed result). A Role's *full* behavior takes **many** micro-apps. **Cross-micro-app / cross-AID composition is the *ecosystem* layer** (the ecosystem viewer), not something inside one micro-app.
+3. **ACDCs are the currency; most are authored or imported, not generated.** A micro-app's elements (commands, events, projections — most of the ~10) consume and produce **ACDCs**, exchanged via **IPEX** (offer / grant / admit). The template concerns itself with *ACDCs* — their schema SAIDs and IPEX flow — not any one data format. ACDCs are sourced three ways: **authored** (by `/micro-app-template-gen`, the default), **imported** from other ecosystems (they are just SAIDs — the composability win: snap an existing concept onto your context), or **derived** from a deterministic pre-ACDC (SAD) source. *Only novel services invent new ACDCs; mature ecosystems are assembled from existing ones.*
 
-*Example (insurance — the only domain we touch, and only as the §8 test scenario):* a **Product Designer** role's *Manage Insurance Product* responsibility is one micro-app whose **commands** include `sandbox` and `publish` (creating / releasing product versions); a **Rating Engine** role's *Calculate Premium* responsibility is another. Each gets a template; the loader configures its Service-AID; the `ipd` product data is what the compute consumes. **`sandbox`/`publish` are domain commands of a template — never features of this generic spec.**
+*Example (insurance — the only domain we touch, and only as the §8 test scenario):* a **Product Designer** role's *Manage Insurance Product* responsibility is one micro-app whose **commands** include `sandbox` and `publish` (creating / releasing product versions); a **Rating Engine** role's *Calculate Premium* responsibility is another. Each gets a template; the loader configures its Service-AID. Those commands traffic in **ACDCs** — the Product is an ACDC, the sandbox *result* is an ACDC — and `ipd` is just *one* (insurance-specific, deterministic) **SAD source** feeding some of them. **`sandbox`/`publish` are domain commands of a template — never features of this generic spec.**
 
 ## 2. Scope
 
@@ -27,7 +28,7 @@ Two principles that resolve prior confusion:
 - **The loader** — `load(template, deploy_data) -> ServiceAid`: a *template-aware* layer that instantiates a `keri_serviceaid` `ServiceAid` (commands + providers) from a template + deploy manifest. (This subsumes the earlier "designer→runtime bridge": resolving template symbolic refs → live SAIDs *is* the loader's job.)
 - **Per-compute authorization gate** — each command's optional, **pluggable** authz *method* (`aid` / `allowlist` / `credential`), data-driven (§4.1).
 - **Two substrate items** (the only `keri_serviceaid` changes — both **domain-agnostic**): **registry-targeting + revoke** (§6.1) and **completing the credential-presentation authz method** (§6.2).
-- **Data production (collaborative authoring)** — `ipd` → files → fragment ACDCs → IPEX → a coordinator-assembled **manifest ACDC** (§5). The manifest SAID is a deploy-data input the micro-app consumes.
+- **ACDC sourcing & assembly (collaborative authoring)** — the ACDCs a micro-app traffics in, **authored / imported / derived**, IPEX-exchanged and (where co-produced) coordinator-assembled into a **manifest ACDC** (§5). `ipd` is the insurance test's deterministic SAD source — one source, not the model. The resulting SAIDs are deploy-data inputs.
 - **CLIs** — `said` (saidify) and `micro-app` (drive the loader + the authoring flow) — thin over the Qt-free authoring/loader library.
 - **A bash multi-party integration test** as the acceptance criterion (§8), against local demo witnesses (swappable to the federation).
 
@@ -84,7 +85,7 @@ Two principles that resolve prior confusion:
 | `credentials.imports[]`                        | inputs the compute expects                                                            | their **schema SAIDs**                                                   |
 | `rules[]`                                      | reply `rules` / preconditions                                                         | —                                                                        |
 | witness/OOBI                                   | `LocalRuntime` / witness config                                                       | demo or **federation OOBIs**                                             |
-| product-data ref (`ipd`/manifest)              | data the compute `fn` reads                                                           | the **manifest SAID** / content SADs                                     |
+| ACDC inputs/outputs (per element)              | the ACDCs each element consumes / produces                                                           | the live **ACDC / schema SAIDs** (authored, imported, or derived)                                     |
 
 
 **Decisions:**
@@ -123,17 +124,22 @@ The micro-app's **own** AID (the role's signing identity) is resolved **differen
 
 **Optional role-authorization credential:** the chosen AID may be required to hold a credential authorizing it to act in the role (an authz check on the micro-app's *own* identity — "this AID may *be* a Rating Engine"), verified at bind time. Distinct from §4.1's per-request gate.
 
-## 5. Data production — collaborative authoring (the input, not the center)
+## 5. ACDC sourcing & assembly (the input, not the center)
 
-How the product **data** the micro-app consumes gets produced and assembled, by multiple parties — each its own Service-AID (per the one-AID principle):
+The ACDCs a micro-app's elements traffic in come from three sources:
 
-- **Contributors** (e.g. product-designer, actuary, rules-author): each runs its domain command (`ipd` → files), `said`-stamps the content, and issues a **fragment ACDC** — `{i:<contributor AID>, s:<fragment-type schema SAID>, a:{contentSaid, label, kind, role}, e?:{prior}}` — content **SAID-referenced, not inlined**.
-- IPEX: each contributor **grants** its fragment to the **coordinator**, who **admits** it.
+- **Authored** — `/micro-app-template-gen` defines the schema and the issuing element produces the ACDC. **The common case.**
+- **Imported** — an ACDC (or just its schema SAID) from another ecosystem, referenced as-is. They are *just SAIDs*; sharing a schema SAID = composing the same concept. **The composability win.**
+- **Derived** — a deterministic process emits a **SAD**, then *augmented* into an ACDC (issuer `i`, schema `s`, edges `e`). `ipd` is the insurance example: it emits SADs (coverages, rating-tables, derivation-logic) that ride in an ACDC's `a` by content SAID, not inlined.
+
+When several parties co-produce one Responsibility's inputs, assembly is generic and IPEX-native (each party its own Service-AID):
+
+- Each contributor issues a **fragment ACDC** — `{i:<contributor AID>, s:<schema SAID>, a:{contentSaid, label, kind}, e?:{prior}}` — and **grants** it to a **coordinator**, who **admits** it.
 - **Coordinator** (a Service-AID): assembles a **manifest ACDC** via edges — `Reply.acdc(edges={ "<fragment>":{cred_said, schema_said}, …, "supersedes":{cred_said:<prior manifest>, schema_said} })`. *Validated against the substrate:* `IpexGrantIssuer` builds the `e` block from exactly this `{cred_said, schema_said}` edge shape today — **no `keri_serviceaid` change needed for assembly.**
 - A `validate` step checks the assembled whole: every edge resolves, each fragment ACDC verifies, no duplicate fragment types. (Deep attribute/DAG validation deferred.)
-- The **manifest SAID becomes a deploy-data input** (§4 table, last row) the micro-app's compute reads.
+- The resulting **SAIDs are deploy-data inputs** (§4 table) the elements read.
 
-Schema SAIDs are the concept identifiers (one schema SAID per fragment type, everywhere). Fragments/manifest are shaped to be **representable as designer `credentials.exports` (+ envelope edges)** so the template-gen path is natural — but we don't modify the designer.
+Schema SAIDs are the concept identifiers (one per concept, everywhere — exactly what makes import & composition work). Fragments/manifest are shaped to be **representable as designer `credentials.exports` (+ envelope edges)** so the template-gen path is natural — but we don't modify the designer.
 
 ## 6. The two substrate items (only `keri_serviceaid` changes)
 
