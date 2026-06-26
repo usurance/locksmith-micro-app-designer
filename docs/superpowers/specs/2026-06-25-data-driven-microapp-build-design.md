@@ -82,7 +82,7 @@ Four principles that resolve prior confusion:
 | ---------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `header.role` + identity                       | the ServiceAid's role/AID                                                             | the incepted **AID**                                                     |
 | `commands[]`                                   | a `@svc.command(route, payload_schema, issues, requires_credential, fn)` registration | —                                                                        |
-| `commands[].compute` (abstract capability ref) | the command's `fn`                                                                    | an **ARN** (cloud Lambda) or a **Python entry-point** (local)            |
+| `commands[].compute` (abstract capability ref) | the **command** Service-AID's `fn` (Phase 1) — the *arbitrary* business compute (vs. the DSL-conformant aggregate/projection fns) | an **ARN** (cloud) / **entry-point** (local) + the signing **AID** |
 | `commands[].requires?` (authz gate, §4.1)      | the chosen authz provider (`authz` / `credgate`)                                      | the method's live values (AID / AID-set / **schema SAID** + constraints) |
 | `aggregates[]` *(Phase 2, §4.3)* | an **aggregate** Service-AID — one DSL-driven fold fn for all aggregates | aggregate compute **ARN / entry-point** + AID |
 | `projections[]` *(Phase 2, §4.3)* | a **projection** Service-AID — one DSL-driven fold fn for all projections | projection compute **ARN / entry-point** + AID |
