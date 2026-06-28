@@ -313,7 +313,7 @@
     },
     "command": {
       "type": "object",
-      "required": ["id", "name", "description", "route", "payload_schema", "idempotency_key_expression", "emissions"],
+      "required": ["id", "name", "description", "route", "payload_schema", "emissions"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
@@ -329,7 +329,6 @@
         "auth_preconditions": { "type": "array", "items": { "$ref": "#/$defs/rule_ref_obj" } },
         "state_preconditions": { "type": "array", "items": { "$ref": "#/$defs/rule_ref_obj" } },
         "temporal_preconditions": { "type": "array", "items": { "$ref": "#/$defs/rule_ref_obj" } },
-        "idempotency_key_expression": { "type": "string" },
         "emissions": { "type": "array", "items": { "$ref": "#/$defs/emission" } },
         "authz": { "$ref": "#/$defs/authz" }
       }

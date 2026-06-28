@@ -307,7 +307,6 @@ def test_command_with_credential_emission_validates(minimal_valid_template):
         "auth_preconditions": [],
         "state_preconditions": [],
         "temporal_preconditions": [],
-        "idempotency_key_expression": "hash(payload.jurisdiction)",
         "emissions": [
             {
                 "kind": "exchange",
