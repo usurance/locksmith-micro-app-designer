@@ -206,6 +206,9 @@
           "rule_ref": "applicant_provided_all_required_fields"
         }
       ],
+      "authz": {
+        "method": "open"
+      },
       "counterparty_role": "carrier",
       "description": "Adjudicate a pending application favorably and issue a new carrier_license credential to the applicant. Locksmith renders this as the regulator's grant-decision form, prefilled from the inbound application.",
       "emissions": [
@@ -232,7 +235,6 @@
         }
       ],
       "id": "grant_license",
-      "idempotency_key_expression": "hash(payload.application_id + ':' + payload.license_number)",
       "name": "Grant carrier license",
       "payload_schema": {
         "additionalProperties": false,
@@ -300,6 +302,9 @@
       ]
     },
     {
+      "authz": {
+        "method": "open"
+      },
       "counterparty_role": "carrier",
       "description": "Adjudicate a pending application unfavorably. Sends a spurn back to the applicant and records the denial in the license registry. No credential is issued.",
       "emissions": [
@@ -321,7 +326,6 @@
         }
       ],
       "id": "spurn_application",
-      "idempotency_key_expression": "hash('spurn:' + payload.application_id)",
       "name": "Deny carrier license application",
       "payload_schema": {
         "additionalProperties": false,
@@ -349,6 +353,9 @@
       ]
     },
     {
+      "authz": {
+        "method": "open"
+      },
       "counterparty_role": "carrier",
       "description": "Temporarily put an active carrier_license into a suspended state. The license is not revoked; the carrier may seek reinstatement once grounds are cleared.",
       "emissions": [
@@ -365,7 +372,6 @@
         }
       ],
       "id": "suspend_license",
-      "idempotency_key_expression": "hash('suspend:' + payload.license_said)",
       "name": "Suspend carrier license",
       "payload_schema": {
         "additionalProperties": false,
@@ -394,6 +400,9 @@
       ]
     },
     {
+      "authz": {
+        "method": "open"
+      },
       "counterparty_role": "carrier",
       "description": "Move a suspended carrier_license back to active. Requires the suspension_grounds_cleared rule to evaluate true.",
       "emissions": [
@@ -410,7 +419,6 @@
         }
       ],
       "id": "reinstate_license",
-      "idempotency_key_expression": "hash('reinstate:' + payload.license_said)",
       "name": "Reinstate suspended license",
       "payload_schema": {
         "additionalProperties": false,
@@ -439,6 +447,9 @@
       ]
     },
     {
+      "authz": {
+        "method": "open"
+      },
       "counterparty_role": "carrier",
       "description": "Permanently invalidate a carrier_license. Fires a TEL revocation event; the credential cannot be reinstated after revocation.",
       "emissions": [
@@ -455,7 +466,6 @@
         }
       ],
       "id": "revoke_license",
-      "idempotency_key_expression": "hash('revoke:' + payload.license_said)",
       "name": "Revoke carrier license",
       "payload_schema": {
         "additionalProperties": false,
@@ -572,7 +582,7 @@
     ],
     "imports": []
   },
-  "d": "EGC-pXapBBUCNgF6aZq0oJgGmcoKmao0bFdA-Qoy6yAv",
+  "d": "ENOozS6XzugCLoIm9CO6ulpw8O206s01WBn6A-fv6ANA",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",
@@ -767,6 +777,9 @@
   ],
   "reactions": [
     {
+      "authz": {
+        "method": "open"
+      },
       "description": "When a carrier submits a carrier_license_application via IPEX apply, record the application in the license registry as pending and surface it to the regulator's review queue. The regulator will then either grant_license or spurn_application.",
       "emissions": [
         {
@@ -787,6 +800,9 @@
       }
     },
     {
+      "authz": {
+        "method": "open"
+      },
       "description": "When a carrier withdraws a pending application (notification to /insurance/note/application_withdrawn) before adjudication, remove it from pending_applications. No spurn fires because the applicant is the one cancelling.",
       "emissions": [
         {
