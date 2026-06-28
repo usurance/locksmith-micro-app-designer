@@ -128,14 +128,14 @@ The state machine layered on top can have any names; transitions map each to one
 1. **Route** — exn route following naming conventions (see `naming-conventions.md`). Must not start with `/ipex/`.
 2. **Counterparty role** — who receives this command, if any
 3. **Payload schema** — JSON-Schema for the actor's input (Locksmith renders as a form)
-4. **Preconditions** — auth (forward-ref rules), state (forward-ref rules), temporal (forward-ref rules)
-5. **Idempotency key expression** — UEL over `payload` only (no state, no principal)
+4. **Authorization (KERI-native)** — every externally-invocable command declares `authz`: `open` (any authenticated AID), `aid`/`allowlist` (specific AID(s)), or `credential` (`schema_said` [+ optional `issuer`]). Never express authorization as a UEL predicate — that is a defect (see `docs/BE-KERI-NATIVE.md`). `auth_preconditions` are for *non-authz* validation only (payload completeness, state guards).
+5. **Preconditions** — state (forward-ref rules), temporal (forward-ref rules)
 6. **Emissions** — what fires on success: exchange (IPEX or exn out), lifecycle_advance (advance a credential's state), aggregate_event (append to a local aggregate)
 
 **Anti-patterns:**
 
 - ❌ Using `/ipex/*` for app-defined commands — reserved for protocol
-- ❌ Referencing state or principal in idempotency_key_expression — must be deterministic from payload alone
+- ❌ Expressing authorization as a UEL predicate in `auth_preconditions` — use the `authz` field instead
 
 ## Step 5 — Aggregates
 
@@ -156,8 +156,9 @@ Aggregates are typically TEL-backed (when tracking credential lifecycle) or KEL-
 For each reaction:
 
 1. **Trigger** — credential_received (with imported_credential_id + optional ipex_verb), exn_received (with route), lifecycle_event (with credential and state), or scheduled (with cadence)
-2. **Emissions** — same shape as command emissions
-3. **Failure policy** — `log_and_continue` | `log_and_spurn` | `abort`; optional timeout_seconds
+2. **Authorization (KERI-native)** — every externally-invocable reaction declares `authz`: `open` (any authenticated AID), `aid`/`allowlist` (specific AID(s)), or `credential` (`schema_said` [+ optional `issuer`]). Never express authorization as a UEL predicate — that is a defect (see `docs/BE-KERI-NATIVE.md`). `auth_preconditions` are for *non-authz* validation only (payload completeness, state guards).
+3. **Emissions** — same shape as command emissions
+4. **Failure policy** — `log_and_continue` | `log_and_spurn` | `abort`; optional timeout_seconds
 
 **The subscriber pattern:** Reactions observe events; they don't push to others. The decentralized property.
 
