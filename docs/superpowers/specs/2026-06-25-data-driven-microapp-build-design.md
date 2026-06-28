@@ -108,11 +108,12 @@ Five principles that resolve prior confusion:
 
 ### 4.1 Per-compute authorization gate — who may *ask* (pluggable method)
 
-Each command may declare an optional authorization gate (about the **requester**; §4.2 is about the micro-app's *own* identity). The **method is itself data-driven** — a loadable **authz class** (a `keri_serviceaid` provider Protocol: today `authz` for AID-based, `credgate` for credential-based). The template names the method + config; the deploy manifest fills live values; the loader binds the chosen authz provider into the command:
+Each command may declare an authorization gate (about the **requester**; §4.2 is about the micro-app's *own* identity). It is **fail-closed** — for an externally-invocable command an **undeclared method rejects all callers**; to admit everyone you choose `open` *deliberately*, never by omission. The **method is itself data-driven** — a loadable **authz class** (a `keri_serviceaid` provider Protocol: today `authz` for AID-based, `credgate` for credential-based). The template names the method + config; the deploy manifest fills live values; the loader binds the chosen authz provider into the command:
 
 
 | `requires.method` | Caller must…                           | Template config                                                          | Deploy fills        |
 | ----------------- | -------------------------------------- | ------------------------------------------------------------------------ | ------------------- |
+| `open`            | be any **authenticated** AID — identified (every exn is signed), just unrestricted | —                                                                        | —                   |
 | `aid`             | be a specific AID                      | —                                                                        | the **AID**         |
 | `allowlist`       | be one of a set of AIDs                | —                                                                        | the **AID set**     |
 | `credential`      | own/present an ACDC of a required type | `issuer?` / `attribute_constraints?` (e.g. `status=active`, `amount>=X`) | the **schema SAID** |
@@ -120,7 +121,7 @@ Each command may declare an optional authorization gate (about the **requester**
 
 For `credential`: the requester **presents** the ACDC via IPEX/exn; the gate checks schema match + issuer + attribute constraints + **not-revoked** (TEL). On any method's failure → `Reply(kind="reject")`; the compute `fn` runs only if the gate passes.
 
-The abstraction is the injected authz **provider Protocol**, so new methods (a multisig threshold, a delegation check, or a *composed* `allowlist`-AND-`credential`) are loadable without touching command code. **Status:** `aid`/`allowlist` map to the shipped `authz` provider; `credential` is the partially-deferred presentation gate (§6.2).
+The abstraction is the injected authz **provider Protocol**, so new methods (a multisig threshold, a delegation check, or a *composed* `allowlist`-AND-`credential`) are loadable without touching command code. **Status:** `open` is a trivial `AllowAll` provider (ships free); `aid`/`allowlist` map to the shipped `authz` provider; `credential` is the partially-deferred presentation gate (§6.2). Even `open` calls are **attributable** — the requester AID is recorded — so openness is *not* anonymity.
 
 ### 4.2 Identity binding — who the micro-app *is* (local vs cloud)
 
