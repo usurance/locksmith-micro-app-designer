@@ -83,9 +83,10 @@ Five principles that resolve prior confusion:
 | Template field (DSL)                           | Drives in `keri_serviceaid`                                                           | Deploy manifest fills                                                    |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `header.role` + identity                       | the ServiceAid's role/AID                                                             | the incepted **AID**                                                     |
-| `commands[]`                                   | a `@svc.command(route, payload_schema, issues, requires_credential, fn)` registration | —                                                                        |
+| `commands[]`                                   | the role's *outbound* action + `emissions`; with its triggering **reaction** → a `@svc.command` handler (see note) | —                                                                        |
 | `commands[].compute` (abstract capability ref) | the **command** Service-AID's `fn` (Phase 1) — the *arbitrary* business compute (vs. the DSL-conformant aggregate/projection fns) | an **ARN** (cloud) / **entry-point** (local) + the signing **AID** |
-| `commands[].requires?` (authz gate, §4.1)      | the chosen authz provider (`authz` / `credgate`)                                      | the method's live values (AID / AID-set / **schema SAID** + constraints) |
+| `auth_preconditions` / `state_preconditions` (→ §4.1 gate, normalized) | the chosen authz provider (`authz` / `credgate`) + runtime guards | the method's live values (AID / AID-set / **schema SAID** + constraints) |
+| `reactions[]` (inbound `exn_received`) | the **inbound** side of a `@svc.command` handler — the route it answers + its §4.1 gate | — |
 | `aggregates[]` *(Phase 2, §4.3)* | an **aggregate** Service-AID — one DSL-driven fold fn for all aggregates | aggregate compute **ARN / entry-point** + AID |
 | `projections[]` *(Phase 2, §4.3)* | a **projection** Service-AID — one DSL-driven fold fn for all projections | projection compute **ARN / entry-point** + AID |
 | `workflows[]` *(Phase 2, §4.3)* | orchestration across command/aggregate/projection + counterparties | — |
@@ -97,6 +98,12 @@ Five principles that resolve prior confusion:
 
 
 > **Two distinct `rules`.** The template's top-level `rules[]` (+ `rule_ref`s) are *authoring-time constraint clauses* (legal prose, predicates, validations, computations) — **configuration** referenced across the template, **not** ACDC content. An issued ACDC's `r` (Ricardian) block is populated **separately, at issuance**, via `Reply.acdc(rules=…)` (keripy `proving.credential` sets the `r` block). Whether an export's `rule_refs` → `legal_prose` serializes into that `r` block is **unspecified today** — a gap to settle during template authoring.
+
+> **Template vocabulary → `keri_serviceaid` mapping (the loader's real job).** The table is the loader's *normalized* view; the real template (see the adopted `regulator-grants-carrier-license` example) names things differently, and bridging them **is** the loader:
+> - A `keri_serviceaid` `@svc.command(route, fn)` is an **inbound-request handler that replies**, assembled from a template **reaction** (the inbound `exn` route + its §4.1 gate) **plus the command it triggers** (the compute + `emissions`/issuance). So **one handler ≈ one reaction + its command** — *not* `commands[] → @svc.command` 1:1.
+> - **Reactions** carry the §4.1 *who-may-ask* gate (the carrier's license **application** arrives `open`); **commands** are the role's *outbound* actions, gated by the role's own authority (§4.2) + preconditions, doing the issuance.
+> - Authz is expressed as **`auth_preconditions` / `state_preconditions`** (UEL `rule_ref` predicates), **not** a `requires.method` field. The loader **normalizes** common patterns into the §4.1 methods and falls back to a **UEL evaluator** for exotic predicates.
+> - **Open decision (we own the format):** add a structured `authz` field to the template so common gates map 1:1 to §4.1, vs. the loader parsing predicates / evaluating UEL. Settle in the loader plan — it ripples across spec + schema + skill + the reference template + validator.
 
 **Decisions:**
 
