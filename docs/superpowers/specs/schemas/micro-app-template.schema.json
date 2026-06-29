@@ -238,6 +238,18 @@
         }
       }
     },
+    "authz": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method"],
+      "properties": {
+        "method": {"enum": ["open", "aid", "allowlist", "credential"]},
+        "aid": {"type": "string"},
+        "aids": {"type": "array", "items": {"type": "string"}},
+        "schema_said": {"type": "string"},
+        "issuer": {"type": "string"}
+      }
+    },
     "rule_ref_obj": {
       "type": "object",
       "required": ["rule_ref"],
@@ -301,7 +313,7 @@
     },
     "command": {
       "type": "object",
-      "required": ["id", "name", "description", "route", "payload_schema", "idempotency_key_expression", "emissions"],
+      "required": ["id", "name", "description", "route", "payload_schema", "emissions"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
@@ -317,8 +329,8 @@
         "auth_preconditions": { "type": "array", "items": { "$ref": "#/$defs/rule_ref_obj" } },
         "state_preconditions": { "type": "array", "items": { "$ref": "#/$defs/rule_ref_obj" } },
         "temporal_preconditions": { "type": "array", "items": { "$ref": "#/$defs/rule_ref_obj" } },
-        "idempotency_key_expression": { "type": "string" },
-        "emissions": { "type": "array", "items": { "$ref": "#/$defs/emission" } }
+        "emissions": { "type": "array", "items": { "$ref": "#/$defs/emission" } },
+        "authz": { "$ref": "#/$defs/authz" }
       }
     },
     "log_scope": { "type": "string", "enum": ["private", "witnessed", "shared"] },
@@ -391,7 +403,8 @@
             "on_validation_failure": { "type": "string", "enum": ["log_and_continue", "log_and_spurn", "abort"] },
             "timeout_seconds": { "type": ["integer", "null"], "minimum": 0 }
           }
-        }
+        },
+        "authz": { "$ref": "#/$defs/authz" }
       }
     },
     "workflow_step": {

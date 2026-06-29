@@ -24,9 +24,27 @@
     "imports": [],
     "exports": []
   },
-  "commands": [],
+  "commands": [
+    {
+      "id": "REPLACE-ME",
+      "name": "REPLACE ME",
+      "description": "REPLACE ME — one sentence describing the action.",
+      "route": "/replace-me/cmd/replace-me",
+      "authz": {"method": "open"},
+      "payload_schema": {"type": "object", "properties": {}, "additionalProperties": false},
+      "emissions": []
+    }
+  ],
   "aggregates": [],
-  "reactions": [],
+  "reactions": [
+    {
+      "id": "REPLACE-ME",
+      "description": "REPLACE ME — one sentence describing what triggers this reaction and what it does.",
+      "trigger": {"type": "exn_received", "route": "/replace-me/cmd/replace-me"},
+      "authz": {"method": "open"},
+      "emissions": []
+    }
+  ],
   "workflows": [],
   "projections": [],
   "rules": []

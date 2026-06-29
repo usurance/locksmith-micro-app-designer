@@ -307,7 +307,6 @@ def test_command_with_credential_emission_validates(minimal_valid_template):
         "auth_preconditions": [],
         "state_preconditions": [],
         "temporal_preconditions": [],
-        "idempotency_key_expression": "hash(payload.jurisdiction)",
         "emissions": [
             {
                 "kind": "exchange",
@@ -332,7 +331,6 @@ def test_command_on_ipex_route_fails(minimal_valid_template):
         "description": "Tries to use /ipex/ route.",
         "route": "/ipex/apply",
         "payload_schema": {},
-        "idempotency_key_expression": "hash(payload)",
         "emissions": []
     })
     errors = validate_against_meta_schema(minimal_valid_template, META_SCHEMA)
@@ -346,7 +344,6 @@ def test_invalid_ipex_verb_fails(minimal_valid_template):
         "description": "Uses non-IPEX verb.",
         "route": "/insurance/cmd/x",
         "payload_schema": {},
-        "idempotency_key_expression": "hash(payload)",
         "emissions": [
             {
                 "kind": "exchange",
