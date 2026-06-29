@@ -117,7 +117,49 @@ For each exported credential, walk:
 
 The state machine layered on top can have any names; transitions map each to one of these three TEL primitives.
 
-**Schema authoring side-step:** When you reach the schema for a credential, write a separate JSON-Schema file at `schemas/{credential_id}.json`. Compute its SAID using `python scripts/saidify_acdc_schema.py` (the existing project utility) OR by stamping with the same saidify helper used for the template. Reference both `schema_said` and `schema_path` in the template.
+**Schema authoring side-step:** When you reach the schema for a credential, write a separate JSON-Schema file at `schemas/{credential_id}.json`.
+
+**The file MUST be a full ACDC *envelope* schema — not just the attribute fields.** A credential is issued as `{v, d, i, ri, s, a:{…}}` and KERI validates the schema against that **whole** object, so a schema that lists `license_number`, `effective_date`, … at the top level is **not** a valid ACDC schema: issuance fails with `ConfigurationError: '<field>' is a required property`. The SME describes the *attributes*; the schema file wraps them in the envelope. Canonical shape:
+
+```json
+{
+  "$id": "",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Carrier License",
+  "type": "object",
+  "properties": {
+    "v": {"type": "string"},
+    "d": {"type": "string"},
+    "i": {"type": "string"},
+    "ri": {"type": "string"},
+    "s": {"type": "string"},
+    "a": {
+      "oneOf": [
+        {"type": "string"},
+        {
+          "$id": "",
+          "type": "object",
+          "properties": {
+            "d":  {"type": "string"},
+            "i":  {"type": "string"},
+            "dt": {"type": "string", "format": "date-time"},
+            "license_number": {"type": "string"}
+            /* …the SME's attribute fields go here… */
+          },
+          "additionalProperties": false,
+          "required": ["d", "i", "dt", "license_number"]
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": ["v", "d", "i", "ri", "s", "a"]
+}
+```
+
+The SME's attributes live in the **second `a.oneOf` branch**, alongside the mandatory `d`/`i`/`dt`. (`e` and `r` sections follow the same `oneOf` pattern when the credential has edges or Ricardian rules.)
+
+Stamp the SAIDs with `python scripts/saidify_acdc_schema.py schemas/{credential_id}.json` — it sets the **envelope** `$id` (the canonical *schema SAID*, used in the template's `schema_said` and in the issued credential's `s` field) **and** the inner `a.oneOf[1].$id` (the *attributes SAID*). Reference the envelope `schema_said` and `schema_path` in the template's `credentials.exports[]` and in any `emissions[].exchange.schema_said_referenced`. Confirm the result issues: a quick `IpexGrantIssuer` round-trip (or the loader's e2e) is the only thing that proves a schema is issuance-valid — `micro_app_saidify.py --verify` only checks the *template* SAID and treats `schema_said` as opaque.
 
 ## Step 4 — Commands
 

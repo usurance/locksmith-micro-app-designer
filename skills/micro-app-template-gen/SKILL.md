@@ -87,6 +87,7 @@ Plus:
 - ❌ Skipping Step 9 (rules) — most contractual and enforcement substance lives there
 - ❌ Skipping the adversarial review — the highest-value step
 - ❌ Inventing schema SAIDs — they must be content-addressed
+- ❌ Authoring an attribute-only export schema — an ACDC schema is the full *envelope* (`v/d/i/ri/s/a.oneOf`); the SME's attributes nest under `a.oneOf[1]` with `d/i/dt`. A top-level attribute schema fails ACDC issuance (`'<field>' is a required property`). See ten-step §Step 3.
 - ❌ Authoring on `/ipex/*` routes — reserved for protocol
 - ❌ Conflating imported credentials with exported credentials — different lists, different purposes
 - ❌ Putting state or principal in `idempotency_key_expression` — must be deterministic from payload alone

@@ -217,7 +217,7 @@
             "exported_credential_id": "carrier_license",
             "imported_credential_id": null,
             "kind": "credential",
-            "schema_said_referenced": "ENRy4fo74JoBf2_1K2Olx1WJ6UqY_v98Y8S_qnw2GuDR",
+            "schema_said_referenced": "ELK09oTcRiiv-Zmxl-rjKo6EVyOLV-5o4SK96g1kSUie",
             "verb": "grant"
           },
           "kind": "exchange"
@@ -313,7 +313,7 @@
             "exported_credential_id": "carrier_license",
             "imported_credential_id": null,
             "kind": "credential",
-            "schema_said_referenced": "ENRy4fo74JoBf2_1K2Olx1WJ6UqY_v98Y8S_qnw2GuDR",
+            "schema_said_referenced": "ELK09oTcRiiv-Zmxl-rjKo6EVyOLV-5o4SK96g1kSUie",
             "verb": "spurn"
           },
           "kind": "exchange"
@@ -573,7 +573,7 @@
         ],
         "schema": {
           "schema_path": "schemas/carrier_license.json",
-          "schema_said": "ENRy4fo74JoBf2_1K2Olx1WJ6UqY_v98Y8S_qnw2GuDR"
+          "schema_said": "ELK09oTcRiiv-Zmxl-rjKo6EVyOLV-5o4SK96g1kSUie"
         },
         "value_flow": {
           "implied_credentials": []
@@ -582,7 +582,7 @@
     ],
     "imports": []
   },
-  "d": "ENOozS6XzugCLoIm9CO6ulpw8O206s01WBn6A-fv6ANA",
+  "d": "EAt5GuC9hEqlyicR3xNbUpGRmQejtDYkr2a3vsl66BYZ",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",
