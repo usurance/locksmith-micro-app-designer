@@ -12,12 +12,16 @@ describing one role's slice of one use case in a KERI-native ecosystem:
 2. **Claude Code marketplace plugin** (`skills/micro-app-template-gen/`) — a conversational
    10-step authoring skill distributed via `.claude-plugin/`.
 
-The normative artifact contract is
-`docs/superpowers/specs/2026-05-09-micro-app-template-authoring-and-data-model.md`, validated against
-the meta-schemas in `docs/superpowers/specs/schemas/`. Read it before changing the template shape,
-primitives, or vocabulary — both artifacts must stay conformant. The same `docs/superpowers/specs/`
-dir also holds the designer-plugin spec (`2026-05-12`) and runtime-design spec (`2026-05-15`);
-`docs/superpowers/plans/` holds the historical v1 build plans.
+The normative artifact contract is canonical in the ugard repo at
+`../ugard/docs/superpowers/specs/2026-05-09-micro-app-template-authoring-and-data-model.md`
+(a local pointer stub lives at the old path,
+`docs/superpowers/specs/2026-05-09-micro-app-template-authoring-and-data-model.md`, in this repo).
+Read it before changing the template shape, primitives, or vocabulary — both artifacts must stay
+conformant. The meta-schemas that validate against it remain **in this repo**, at
+`docs/superpowers/specs/schemas/` — they are code artifacts (the validator's default path), not
+narrative docs, so they stay code-anchored here rather than moving to ugard canon. The same
+`docs/superpowers/specs/` dir also holds the designer-plugin spec (`2026-05-12`) and runtime-design
+spec (`2026-05-15`); `docs/superpowers/plans/` holds the historical v1 build plans.
 
 ## Commands
 

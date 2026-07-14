@@ -1,7 +1,7 @@
 # UEL/1.0 Cheat-Sheet
 
 UEL is the executable expression language for predicate, computational, and
-validation rules, plus `fold_expression`, `payload_mapping`, `idempotency_key_expression`,
+validation rules, plus `fold_expression`, `payload_mapping`,
 `lens_template`, and `row_filter` predicates.
 
 **Two-phase model.** Every UEL expression is parsed, type-checked against a
@@ -20,7 +20,6 @@ bound contexts. Use only the variables listed; nothing else is in scope.
 | `command.auth_preconditions[].rule.expression` (a `predicate` rule) | `{ principal, command }` |
 | `command.state_preconditions[].rule.expression` | `{ state, command, principal }` |
 | `command.temporal_preconditions[].rule.expression` | `{ command, now() }` |
-| `command.idempotency_key_expression` | `{ payload }` only — **no state, no principal** |
 | `command.emissions[].payload_mapping` (kind `aggregate_event`) | `{ state, command, principal, payload }` |
 | `reaction.emissions[].payload_mapping` (`credential_received`) | `{ event, state }` — `event.credential.*` available |
 | `reaction.emissions[].payload_mapping` (`exn_received`) | `{ event, state }` — `event.payload.*` available |
@@ -141,12 +140,6 @@ source == "license_granted"
     : state
 ```
 
-**Idempotency key — payload only, deterministic:**
-
-```
-hash(payload.jurisdiction + ":" + payload.lines_of_business.sort().join(","))
-```
-
 **Self-or-licensed row filter** (projection `row_filter`, purpose
 `projection_row_filter`):
 
@@ -165,8 +158,8 @@ state.applications.exists(a => a.id == workflow.context.application_id && a.stat
 
 | Function | Signature | Notes |
 |---|---|---|
-| `now()` | `=> datetime` | Available in `temporal_precondition` and `lifecycle_transition_condition`. Do **not** use elsewhere — folds and idempotency keys must be deterministic. |
-| `hash(...)` | `(...any) => said` | Variadic content hash. Use in `idempotency_key_expression` and in derived SAIDs inside `payload_mapping`. |
+| `now()` | `=> datetime` | Available in `temporal_precondition` and `lifecycle_transition_condition`. Do **not** use elsewhere — folds must be deterministic. |
+| `hash(...)` | `(...any) => said` | Variadic content hash. Use for derived SAIDs inside `payload_mapping`. |
 | `length(x)` | `(list \| string) => number` | Equivalent to `.length` property. |
 | `min(a, b)` / `max(a, b)` | `(T, T) => T` | Same-type pair. |
 | `notNull(x)` | `(T?) => bool` | Optional-presence check. |
@@ -196,10 +189,6 @@ write the conversion directly (e.g. `c.said` not `c.said|said8`).
 
 ## 6. Gotchas (real bugs)
 
-- **`idempotency_key_expression` MUST be payload-only.** Referencing `state` or
-  `principal` makes it non-deterministic across replays. The loader rejects this
-  by giving the position a bindings-of-`{ payload }` only.
-
 - **No `.contains()`.** Arrays don't have a `.contains` method. Use
   `xs.exists(x => x == y)` for membership.
 
@@ -227,7 +216,7 @@ write the conversion directly (e.g. `c.said` not `c.said|said8`).
   event payload). Verify by checking which fields the meta-schema says are
   populated.
 
-- **Don't reference `now()` in folds, payload mappings, or idempotency keys.**
+- **Don't reference `now()` in folds or payload mappings.**
   These must be deterministic; runtime time is supplied via `event.timestamp`
   (set when the event is appended), which **is** deterministic on replay.
 
@@ -249,7 +238,6 @@ The compiler also enforces the expected return type:
 | `fold_expression` (event) | same as aggregate `state_schema` |
 | `fold_expression` (projection) | `list<row>` |
 | `payload_mapping` | same as the target event's `payload_schema` |
-| `idempotency_key_expression` | any (typically `said` via `hash`) |
 | `computational` | type of `result_attribute` |
 | `lens_template`, `display_template`, `summary_template` | `string` |
 
