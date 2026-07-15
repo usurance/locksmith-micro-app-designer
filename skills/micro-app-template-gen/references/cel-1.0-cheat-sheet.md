@@ -171,8 +171,9 @@ evaluator when it lands (they carry the same conformance-vector obligation
 as the other five).
 
 **Naming note.** Some historical worked examples (predating this profile)
-still show a snake_case `principal.holds_credential(...)` call — that was
-UEL-era shorthand. The `CEL/1.0` profile function is camelCase:
+once used a snake_case `principal.holds_credential(...)` call — that was
+UEL-era shorthand, harmonized to camelCase across the canon and worked
+examples during the 2026-07 migration. The `CEL/1.0` profile function is camelCase:
 `principal.holdsCredential(...)`. Prefer the camelCase form in anything
 authored against this profile.
 

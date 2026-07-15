@@ -233,7 +233,7 @@ For each:
 1. **Source events** — names of event types to fold
 2. **Output schema** — JSON-Schema for the resulting state
 3. **Fold** — CEL handler map (op list or raw reducer) over `{ row, event }` (or `{ state, event }` for `object`-shape projections) producing the row/state
-4. **Access** — row_filter (rule_ref), lens_template
+4. **Access** — row_filter_rule_ref, lens_rule_ref
 5. **Display** — view_type (table | list | cards | kanban | timeline | summary), columns, default_sort, empty_state
 
 ## Step 9 — Rules

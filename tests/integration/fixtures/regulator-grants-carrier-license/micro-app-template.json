@@ -461,7 +461,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_granted",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_number\": command.license_number, \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"effective_date\": command.effective_date, \"expiration_date\": command.expiration_date, \"application_id\": command.application_id, \"granted_at\": event.timestamp }"
+          "payload_mapping": "{ \"license_number\": command.license_number, \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"effective_date\": command.effective_date, \"expiration_date\": command.expiration_date, \"application_id\": command.application_id, \"granted_at\": command.granted_at }"
         }
       ],
       "id": "grant_license",
@@ -479,6 +479,11 @@
           },
           "expiration_date": {
             "format": "date",
+            "type": "string"
+          },
+          "granted_at": {
+            "description": "Regulator-stated date/time the grant takes administrative effect. Client-supplied (mirrors effective_date/expiration_date): the command's {command, state} binding has no runtime clock, so this cannot be sourced from an event envelope that doesn't exist yet at emission time.",
+            "format": "date-time",
             "type": "string"
           },
           "jurisdiction": {
@@ -517,7 +522,8 @@
           "jurisdiction",
           "lines_of_business",
           "effective_date",
-          "expiration_date"
+          "expiration_date",
+          "granted_at"
         ],
         "type": "object"
       },
@@ -552,7 +558,7 @@
           "aggregate_id": "license_registry",
           "event_type": "application_denied",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"application_id\": command.application_id, \"denial_reason\": command.denial_reason, \"denied_at\": event.timestamp }"
+          "payload_mapping": "{ \"application_id\": command.application_id, \"denial_reason\": command.denial_reason, \"denied_at\": command.denied_at }"
         }
       ],
       "id": "spurn_application",
@@ -567,11 +573,17 @@
             "description": "Plain-English reason for the denial. Surfaced to the applicant.",
             "minLength": 1,
             "type": "string"
+          },
+          "denied_at": {
+            "description": "Regulator-stated date/time of the denial. Client-supplied: the command's {command, state} binding has no runtime clock.",
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
           "application_id",
-          "denial_reason"
+          "denial_reason",
+          "denied_at"
         ],
         "type": "object"
       },
@@ -598,7 +610,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_suspended",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": command.license_said, \"suspension_reason\": command.suspension_reason, \"suspended_at\": event.timestamp }"
+          "payload_mapping": "{ \"license_said\": command.license_said, \"suspension_reason\": command.suspension_reason, \"suspended_at\": command.suspended_at }"
         }
       ],
       "id": "suspend_license",
@@ -611,6 +623,11 @@
             "minLength": 44,
             "type": "string"
           },
+          "suspended_at": {
+            "description": "Regulator-stated date/time the suspension takes effect. Client-supplied: the command's {command, state} binding has no runtime clock.",
+            "format": "date-time",
+            "type": "string"
+          },
           "suspension_reason": {
             "minLength": 1,
             "type": "string"
@@ -618,7 +635,8 @@
         },
         "required": [
           "license_said",
-          "suspension_reason"
+          "suspension_reason",
+          "suspended_at"
         ],
         "type": "object"
       },
@@ -645,7 +663,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_reinstated",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": command.license_said, \"reinstatement_note\": command.reinstatement_note, \"reinstated_at\": event.timestamp }"
+          "payload_mapping": "{ \"license_said\": command.license_said, \"reinstatement_note\": command.reinstatement_note }"
         }
       ],
       "id": "reinstate_license",
@@ -692,7 +710,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_revoked",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": command.license_said, \"revocation_reason\": command.revocation_reason, \"revoked_at\": event.timestamp }"
+          "payload_mapping": "{ \"license_said\": command.license_said, \"revocation_reason\": command.revocation_reason, \"revoked_at\": command.revoked_at }"
         }
       ],
       "id": "revoke_license",
@@ -708,11 +726,17 @@
           "revocation_reason": {
             "minLength": 1,
             "type": "string"
+          },
+          "revoked_at": {
+            "description": "Regulator-stated date/time the revocation takes effect. Client-supplied: the command's {command, state} binding has no runtime clock.",
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
           "license_said",
-          "revocation_reason"
+          "revocation_reason",
+          "revoked_at"
         ],
         "type": "object"
       },
@@ -812,7 +836,7 @@
     ],
     "imports": []
   },
-  "d": "EPGq3tE4SU3U3snSdhwgUZJRJGactB5Do785mmC-o2a6",
+  "d": "ECB3SXCX1GGtaaiqIXdgrAclwcCRJcoazStoJn2yzo_y",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",
@@ -888,43 +912,32 @@
       "row_schema": {
         "additionalProperties": false,
         "properties": {
-          "rows": {
+          "applicant_aid": {
+            "type": "string"
+          },
+          "application_id": {
+            "type": "string"
+          },
+          "jurisdiction": {
+            "type": "string"
+          },
+          "lines_of_business": {
             "items": {
-              "properties": {
-                "applicant_aid": {
-                  "type": "string"
-                },
-                "application_id": {
-                  "type": "string"
-                },
-                "jurisdiction": {
-                  "type": "string"
-                },
-                "lines_of_business": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "received_at": {
-                  "format": "date-time",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "application_id",
-                "applicant_aid",
-                "jurisdiction",
-                "lines_of_business",
-                "received_at"
-              ],
-              "type": "object"
+              "type": "string"
             },
             "type": "array"
+          },
+          "received_at": {
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
-          "rows"
+          "application_id",
+          "applicant_aid",
+          "jurisdiction",
+          "lines_of_business",
+          "received_at"
         ],
         "type": "object"
       },
@@ -1062,57 +1075,46 @@
       "row_schema": {
         "additionalProperties": false,
         "properties": {
-          "rows": {
+          "effective_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "expiration_date": {
+            "format": "date",
+            "type": "string"
+          },
+          "granted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "holder_aid": {
+            "type": "string"
+          },
+          "jurisdiction": {
+            "type": "string"
+          },
+          "license_number": {
+            "type": "string"
+          },
+          "license_said": {
+            "type": "string"
+          },
+          "lines_of_business": {
             "items": {
-              "properties": {
-                "effective_date": {
-                  "format": "date",
-                  "type": "string"
-                },
-                "expiration_date": {
-                  "format": "date",
-                  "type": "string"
-                },
-                "granted_at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "holder_aid": {
-                  "type": "string"
-                },
-                "jurisdiction": {
-                  "type": "string"
-                },
-                "license_number": {
-                  "type": "string"
-                },
-                "license_said": {
-                  "type": "string"
-                },
-                "lines_of_business": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                }
-              },
-              "required": [
-                "license_said",
-                "license_number",
-                "holder_aid",
-                "jurisdiction",
-                "lines_of_business",
-                "effective_date",
-                "expiration_date",
-                "granted_at"
-              ],
-              "type": "object"
+              "type": "string"
             },
             "type": "array"
           }
         },
         "required": [
-          "rows"
+          "license_said",
+          "license_number",
+          "holder_aid",
+          "jurisdiction",
+          "lines_of_business",
+          "effective_date",
+          "expiration_date",
+          "granted_at"
         ],
         "type": "object"
       },
@@ -1203,7 +1205,7 @@
           "aggregate_id": "license_registry",
           "event_type": "application_received",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"application_id\": event.payload.application_id, \"applicant_aid\": event.actorAID, \"jurisdiction\": event.payload.jurisdiction, \"lines_of_business\": event.payload.lines_of_business, \"received_at\": event.timestamp }"
+          "payload_mapping": "{ \"application_id\": event.payload.application_id, \"applicant_aid\": event.source_aid, \"jurisdiction\": event.payload.jurisdiction, \"lines_of_business\": event.payload.lines_of_business, \"received_at\": event.datetime }"
         }
       ],
       "failure_policy": {
@@ -1226,7 +1228,7 @@
           "aggregate_id": "license_registry",
           "event_type": "application_withdrawn",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"application_id\": event.payload.application_id, \"withdrawn_at\": event.timestamp }"
+          "payload_mapping": "{ \"application_id\": event.payload.application_id, \"withdrawn_at\": event.datetime }"
         }
       ],
       "failure_policy": {

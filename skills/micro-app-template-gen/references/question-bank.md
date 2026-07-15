@@ -58,7 +58,7 @@ Per-step questions to ask an SME. Pick the primary question first; ask follow-up
   - *"What credentials must the actor hold? (auth preconditions)"*
   - *"What facts must exist in the local state? (state preconditions)"*
   - *"Any deadlines, cooldowns, business hours? (temporal preconditions)"*
-- *"If the actor retries, what stops a duplicate? (idempotency key — derivable from payload alone)"*
+- *"If the actor retries, what stops a duplicate?"* — nothing to author here: `idempotency_key_expression` was removed from the template spec; the runtime dedups on the exn message's own SAID instead.
 - *"What happens on success? Does it emit an IPEX message? Advance a credential's lifecycle? Append to a local aggregate? All of those?"*
 
 ## Step 5 — Aggregates

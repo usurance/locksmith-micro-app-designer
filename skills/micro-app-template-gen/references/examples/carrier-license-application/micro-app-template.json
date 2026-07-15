@@ -257,7 +257,7 @@
           "aggregate_id": "license_registry",
           "event_type": "application_submitted",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"submitted_at\": event.timestamp }"
+          "payload_mapping": "{ \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"submitted_at\": command.submitted_at }"
         }
       ],
       "id": "submit_application",
@@ -305,13 +305,19 @@
               "email"
             ],
             "type": "object"
+          },
+          "submitted_at": {
+            "description": "Carrier-stated date/time of submission. Client-supplied (the Locksmith UI auto-fills the client clock at send time): the command's {command, state} binding has no runtime clock.",
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
           "jurisdiction",
           "lines_of_business",
           "applicant_legal_name",
-          "primary_contact"
+          "primary_contact",
+          "submitted_at"
         ],
         "type": "object"
       },
@@ -337,7 +343,7 @@
       }
     ]
   },
-  "d": "EEgsJaYSB-07nBf_HieNDX-7c8A6D6RLDhYxe9UTEmAi",
+  "d": "ELkoOKnyL8CABfPUgWqNB9Hl1yWjisPPDkiS_4lsomNT",
   "header": {
     "description": "The carrier's side of license application: a startup insurance carrier submits an application to a state regulator and processes the resulting grant or revocation. Pivotal event: an application has been submitted and adjudicated.",
     "display_name": "Carrier Applies for License",
@@ -396,39 +402,28 @@
       "row_schema": {
         "additionalProperties": false,
         "properties": {
-          "rows": {
+          "granted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "jurisdiction": {
+            "type": "string"
+          },
+          "license_said": {
+            "type": "string"
+          },
+          "lines_of_business": {
             "items": {
-              "properties": {
-                "granted_at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "jurisdiction": {
-                  "type": "string"
-                },
-                "license_said": {
-                  "type": "string"
-                },
-                "lines_of_business": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                }
-              },
-              "required": [
-                "license_said",
-                "jurisdiction",
-                "lines_of_business",
-                "granted_at"
-              ],
-              "type": "object"
+              "type": "string"
             },
             "type": "array"
           }
         },
         "required": [
-          "rows"
+          "license_said",
+          "jurisdiction",
+          "lines_of_business",
+          "granted_at"
         ],
         "type": "object"
       },
@@ -502,7 +497,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_granted",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": credential.d, \"jurisdiction\": credential.attributes.jurisdiction, \"lines_of_business\": credential.attributes.lines_of_business, \"granted_at\": event.timestamp }"
+          "payload_mapping": "{ \"license_said\": event.credential.said, \"jurisdiction\": event.credential.attributes.jurisdiction, \"lines_of_business\": event.credential.attributes.lines_of_business, \"granted_at\": event.datetime }"
         }
       ],
       "failure_policy": {
@@ -523,7 +518,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_revoked",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": credential.d, \"jurisdiction\": credential.attributes.jurisdiction, \"revoked_at\": event.timestamp }"
+          "payload_mapping": "{ \"license_said\": event.credential.said, \"jurisdiction\": event.credential.attributes.jurisdiction, \"revoked_at\": event.datetime }"
         }
       ],
       "failure_policy": {
