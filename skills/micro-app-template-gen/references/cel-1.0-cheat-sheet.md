@@ -229,7 +229,7 @@ equivalent):
     { "op": "append", "target": "state", "value": "{ license_said: event.said, jurisdiction: event.jurisdiction, granted_at: event.granted_at }" }
   ],
   "license_revoked": [
-    { "op": "remove", "target": "state", "match": "item.license_said == event.license_said" }
+    { "op": "remove", "target": "state", "where": "item.license_said == event.license_said" }
   ]
 }
 ```

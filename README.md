@@ -27,7 +27,7 @@ The `micro-app-template-gen` skill walks an SME through producing a valid `micro
 
 - 10-step process reference
 - Question bank per step
-- UEL/1.0 cheat sheet (the rule expression language)
+- CEL/1.0 cheat sheet (the rule expression language — a pinned CEL profile)
 - Naming conventions
 - Adversarial review prompts
 - Minimal-valid skeleton template
