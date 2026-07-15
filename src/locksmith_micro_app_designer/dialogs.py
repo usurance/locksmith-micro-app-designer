@@ -75,7 +75,7 @@ class EditHeaderDialog(QDialog):
         self._description = QPlainTextEdit(seed.get("description", ""))
         self._description.setFixedHeight(80)
         self._version = QLineEdit(seed.get("version", "1.0"))
-        self._expression_language = QLineEdit(seed.get("expression_language", "UEL/1.0"))
+        self._expression_language = QLineEdit(seed.get("expression_language", "CEL/1.0"))
         form.addRow("Display name", self._display_name)
         form.addRow("Description", self._description)
         form.addRow("Version", self._version)
