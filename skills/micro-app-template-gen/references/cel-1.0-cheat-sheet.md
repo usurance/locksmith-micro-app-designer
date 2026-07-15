@@ -43,7 +43,7 @@ scope.
 | `commands[].emissions[].payload_mapping` (kind `aggregate_event`) | `{ command, state }` — produces the new event's payload |
 | `reactions[].emissions[].payload_mapping` (trigger `credential_received`) | `{ event, state }` — `event.credential.*` available |
 | `reactions[].emissions[].payload_mapping` (trigger `exn_received`) | `{ event, state }` — `event.payload.*` available |
-| `reactions[].emissions[].payload_mapping` (trigger `lifecycle_event`) | `{ event, state }` — `event.from_state`, `event.to_state` |
+| `reactions[].emissions[].payload_mapping` (trigger `lifecycle_event`) | `{ event, state }` — `event.from_state`, `event.to_state`, `event.credential.*` (the transitioning credential) |
 | Aggregate `fold.<event_type>` handler (op list or raw reducer) | `{ state, event }` — `state` is the folded state **before** this event's step is applied |
 | Aggregate invariant (`aggregates[].invariants[].rule_ref`) | `{ state, event }` — `state` is the **candidate** state, produced by speculatively applying the proposed event's fold step, before that event is appended |
 | Projection `fold.<event_type>` handler (`shape: "collection"`) | `{ row, event }` — `row` is the routed row (selected by `primary_key`), or `null` before its first upsert |
@@ -73,7 +73,7 @@ SAID instead. Don't author one.
   declares (e.g. a `license_received` event with payload fields
   `jurisdiction`, `effective` is read as `event.jurisdiction`,
   `event.effective` — no `.payload.` nesting for the event being folded)
-- `event.credential` (reactions on `credential_received` only) — `{ said, type, issuer, holder, attributes, validity, revoked }`
+- `event.credential` (reactions on `credential_received` and `lifecycle_event`) — `{ said, type, issuer, holder, attributes, validity, revoked }`
 - `row` — fields of the projection's `row_schema`
 - `attributes` — fields of the credential's `attributes` block
 - `credential` (lifecycle `requires`/`condition` slots) — `{ said, type, issuer, holder, attributes, state }`, the credential instance transitioning
@@ -342,10 +342,12 @@ expressions, write the conversion directly (e.g. `c.said` not
   because `list<T>` and `null` don't unify; use `cond ? state + [x] : state`.
 
 - **Reaction `payload_mapping` binds differently per trigger.** For
-  `credential_received`, use `event.credential.*`. For `exn_received` and
-  `lifecycle_event`, use `event.payload.*` (the inbound exn body /
-  lifecycle event payload). Verify by checking which fields the
-  meta-schema says are populated.
+  `credential_received`, use `event.credential.*`. For `exn_received`,
+  use `event.payload.*` (the inbound exn body). For `lifecycle_event`,
+  use `event.from_state`/`event.to_state` plus `event.credential.*`
+  (the transitioning credential); `event.payload.*` carries the
+  lifecycle event's own payload, if any. Verify by checking which
+  fields the meta-schema says are populated.
 
 - **Don't reference `now()` in folds or payload mappings.** These must be
   deterministic; runtime time is supplied via `event.datetime` (the
