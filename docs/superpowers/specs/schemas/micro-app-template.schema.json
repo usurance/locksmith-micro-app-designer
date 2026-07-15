@@ -334,18 +334,86 @@
       }
     },
     "log_scope": { "type": "string", "enum": ["private", "witnessed", "shared"] },
+    "boundary": {
+      "type": "object",
+      "required": ["inception_event_type", "instance_key"],
+      "additionalProperties": false,
+      "properties": {
+        "inception_event_type": { "type": "string" },
+        "instance_key": { "type": "string" }
+      }
+    },
+    "fold_op": {
+      "type": "object",
+      "required": ["op"],
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": ["set", "append", "remove", "increment", "merge", "move", "upsert", "update", "delete"]
+        },
+        "target": { "type": "string" },
+        "value": { "type": "string" },
+        "where": { "type": "string" },
+        "by": { "type": "string" },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "match": { "type": "string" },
+        "set": { "type": "object" }
+      }
+    },
+    "fold_handler": {
+      "oneOf": [
+        { "type": "array", "items": { "$ref": "#/$defs/fold_op" } },
+        {
+          "type": "object",
+          "required": ["expression"],
+          "additionalProperties": false,
+          "properties": { "expression": { "type": "string" } }
+        }
+      ]
+    },
+    "fold_map": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/fold_handler" }
+    },
+    "test_vector_event": {
+      "type": "object",
+      "required": ["type", "payload"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string" },
+        "payload": { "type": "object" }
+      }
+    },
+    "test_vector": {
+      "type": "object",
+      "required": ["name", "events"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "aggregate": { "type": "string" },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/test_vector_event" } },
+        "expected": {},
+        "append": { "$ref": "#/$defs/test_vector_event" },
+        "expect_rejected_by": { "type": "string" },
+        "expect_accepted": { "type": "boolean" }
+      }
+    },
     "aggregate": {
       "type": "object",
-      "required": ["id", "description", "inception_event_type", "state_schema", "initial_state", "log_scope"],
+      "required": ["id", "description", "boundary", "state_schema", "initial_state", "fold", "log_scope"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
         "description": { "type": "string" },
-        "inception_event_type": { "type": "string" },
+        "boundary": { "$ref": "#/$defs/boundary" },
         "state_schema": { "type": "object" },
         "initial_state": {},
+        "fold": { "$ref": "#/$defs/fold_map" },
         "invariants": { "type": "array", "items": { "$ref": "#/$defs/rule_ref_obj" } },
-        "log_scope": { "$ref": "#/$defs/log_scope" }
+        "log_scope": { "$ref": "#/$defs/log_scope" },
+        "test_vectors": { "type": "array", "items": { "$ref": "#/$defs/test_vector" } }
       }
     },
     "reaction_trigger": {
@@ -496,23 +564,37 @@
       "type": "string",
       "enum": ["table", "list", "cards", "kanban", "timeline", "summary"]
     },
+    "projection_shape": {
+      "type": "string",
+      "enum": ["collection", "object"]
+    },
+    "projection_ordering": {
+      "type": "string",
+      "enum": ["source_seq", "datetime_said", "commutative"]
+    },
     "projection": {
       "type": "object",
-      "required": ["id", "name", "description", "source_events", "output_schema", "fold_expression"],
+      "required": ["id", "name", "description", "source_events", "fold"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
         "name": { "type": "string" },
         "description": { "type": "string" },
         "source_events": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
-        "output_schema": { "type": "object" },
-        "fold_expression": { "type": "string" },
+        "shape": { "$ref": "#/$defs/projection_shape", "default": "collection" },
+        "primary_key": { "type": "string" },
+        "row_schema": { "type": "object" },
+        "state_schema": { "type": "object" },
+        "initial_state": {},
+        "fold": { "$ref": "#/$defs/fold_map" },
+        "ordering": { "$ref": "#/$defs/projection_ordering" },
+        "on_unknown_event": { "type": "string", "enum": ["ignore"], "default": "ignore" },
         "access": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
             "row_filter_rule_ref": { "type": "string" },
-            "lens_template": { "type": "string" }
+            "lens_rule_ref": { "type": "string" }
           }
         },
         "display": {
@@ -542,8 +624,19 @@
             },
             "empty_state": { "type": "string" }
           }
+        },
+        "test_vectors": { "type": "array", "items": { "$ref": "#/$defs/test_vector" } }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "shape": { "const": "object" } },
+            "required": ["shape"]
+          },
+          "then": { "required": ["state_schema", "initial_state"] },
+          "else": { "required": ["primary_key", "row_schema"] }
         }
-      }
+      ]
     },
     "rule_type": {
       "type": "string",
