@@ -1,9 +1,61 @@
 {
   "aggregates": [
     {
+      "boundary": {
+        "inception_event_type": "registry_inception",
+        "instance_key": "'license_registry'"
+      },
       "description": "Authoritative registry of every carrier_license this regulator has touched: pending applications under review, active licenses currently in force, suspended licenses awaiting reinstatement or revocation, denied applications, and revoked licenses. The single source of truth for the regulator's TEL-backed licensing posture.",
+      "fold": {
+        "application_denied": [
+          {
+            "op": "remove",
+            "target": "pending_applications",
+            "where": "item.application_id == event.application_id"
+          },
+          {
+            "op": "append",
+            "target": "denied_applications",
+            "value": "{ \"application_id\": event.application_id, \"denial_reason\": event.denial_reason, \"denied_at\": event.denied_at }"
+          }
+        ],
+        "application_received": [
+          {
+            "op": "append",
+            "target": "pending_applications",
+            "value": "{ \"application_id\": event.application_id, \"applicant_aid\": event.applicant_aid, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"received_at\": event.received_at }"
+          }
+        ],
+        "application_withdrawn": [
+          {
+            "op": "remove",
+            "target": "pending_applications",
+            "where": "item.application_id == event.application_id"
+          }
+        ],
+        "license_granted": [
+          {
+            "op": "remove",
+            "target": "pending_applications",
+            "where": "item.application_id == event.application_id"
+          },
+          {
+            "op": "append",
+            "target": "active_licenses",
+            "value": "{ \"license_said\": event.license_said, \"license_number\": event.license_number, \"holder_aid\": event.holder_aid, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"effective_date\": event.effective_date, \"expiration_date\": event.expiration_date, \"granted_at\": event.granted_at }"
+          }
+        ],
+        "license_reinstated": {
+          "expression": "{ \"pending_applications\": state.pending_applications, \"denied_applications\": state.denied_applications, \"suspended_licenses\": state.suspended_licenses.filter(l, l.license_said != event.license_said), \"active_licenses\": state.active_licenses + state.suspended_licenses.filter(l, l.license_said == event.license_said).map(l, { \"license_said\": l.license_said, \"license_number\": l.license_number, \"holder_aid\": l.holder_aid, \"jurisdiction\": l.jurisdiction, \"lines_of_business\": l.lines_of_business, \"effective_date\": l.effective_date, \"expiration_date\": l.expiration_date, \"granted_at\": l.granted_at }), \"revoked_licenses\": state.revoked_licenses }"
+        },
+        "license_revoked": {
+          "expression": "{ \"pending_applications\": state.pending_applications, \"denied_applications\": state.denied_applications, \"active_licenses\": state.active_licenses.filter(l, l.license_said != event.license_said), \"suspended_licenses\": state.suspended_licenses.filter(l, l.license_said != event.license_said), \"revoked_licenses\": state.revoked_licenses + state.active_licenses.filter(l, l.license_said == event.license_said).map(l, { \"license_said\": l.license_said, \"license_number\": l.license_number, \"holder_aid\": l.holder_aid, \"jurisdiction\": l.jurisdiction, \"lines_of_business\": l.lines_of_business, \"effective_date\": l.effective_date, \"expiration_date\": l.expiration_date, \"granted_at\": l.granted_at, \"revocation_reason\": event.revocation_reason, \"revoked_at\": event.revoked_at }) + state.suspended_licenses.filter(l, l.license_said == event.license_said).map(l, { \"license_said\": l.license_said, \"license_number\": l.license_number, \"holder_aid\": l.holder_aid, \"jurisdiction\": l.jurisdiction, \"lines_of_business\": l.lines_of_business, \"effective_date\": l.effective_date, \"expiration_date\": l.expiration_date, \"granted_at\": l.granted_at, \"revocation_reason\": event.revocation_reason, \"revoked_at\": event.revoked_at }) }"
+        },
+        "license_suspended": {
+          "expression": "{ \"pending_applications\": state.pending_applications, \"denied_applications\": state.denied_applications, \"active_licenses\": state.active_licenses.filter(l, l.license_said != event.license_said), \"suspended_licenses\": state.suspended_licenses + state.active_licenses.filter(l, l.license_said == event.license_said).map(l, { \"license_said\": l.license_said, \"license_number\": l.license_number, \"holder_aid\": l.holder_aid, \"jurisdiction\": l.jurisdiction, \"lines_of_business\": l.lines_of_business, \"effective_date\": l.effective_date, \"expiration_date\": l.expiration_date, \"granted_at\": l.granted_at, \"suspension_reason\": event.suspension_reason, \"suspended_at\": event.suspended_at }), \"revoked_licenses\": state.revoked_licenses }"
+        }
+      },
       "id": "license_registry",
-      "inception_event_type": "registry_inception",
       "initial_state": {
         "active_licenses": [],
         "denied_applications": [],
@@ -128,7 +180,22 @@
           "revoked_licenses": {
             "items": {
               "properties": {
+                "effective_date": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "expiration_date": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "granted_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
                 "holder_aid": {
+                  "type": "string"
+                },
+                "jurisdiction": {
                   "type": "string"
                 },
                 "license_number": {
@@ -136,6 +203,12 @@
                 },
                 "license_said": {
                   "type": "string"
+                },
+                "lines_of_business": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 "revocation_reason": {
                   "type": "string"
@@ -149,6 +222,11 @@
                 "license_said",
                 "license_number",
                 "holder_aid",
+                "jurisdiction",
+                "lines_of_business",
+                "effective_date",
+                "expiration_date",
+                "granted_at",
                 "revocation_reason",
                 "revoked_at"
               ],
@@ -159,7 +237,22 @@
           "suspended_licenses": {
             "items": {
               "properties": {
+                "effective_date": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "expiration_date": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "granted_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
                 "holder_aid": {
+                  "type": "string"
+                },
+                "jurisdiction": {
                   "type": "string"
                 },
                 "license_number": {
@@ -167,6 +260,12 @@
                 },
                 "license_said": {
                   "type": "string"
+                },
+                "lines_of_business": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 "suspended_at": {
                   "format": "date-time",
@@ -180,6 +279,11 @@
                 "license_said",
                 "license_number",
                 "holder_aid",
+                "jurisdiction",
+                "lines_of_business",
+                "effective_date",
+                "expiration_date",
+                "granted_at",
                 "suspension_reason",
                 "suspended_at"
               ],
@@ -196,7 +300,133 @@
           "denied_applications"
         ],
         "type": "object"
-      }
+      },
+      "test_vectors": [
+        {
+          "events": [
+            {
+              "payload": {
+                "applicant_aid": "EApplicant1SAID",
+                "application_id": "APP-1",
+                "jurisdiction": "US-CA",
+                "lines_of_business": [
+                  "property"
+                ],
+                "received_at": "2026-08-01T00:00:00Z"
+              },
+              "type": "application_received"
+            },
+            {
+              "payload": {
+                "application_id": "APP-1",
+                "effective_date": "2026-08-15",
+                "expiration_date": "2027-08-15",
+                "granted_at": "2026-08-10T00:00:00Z",
+                "holder_aid": "EApplicant1SAID",
+                "jurisdiction": "US-CA",
+                "license_number": "CA-0001",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              },
+              "type": "license_granted"
+            }
+          ],
+          "expected": {
+            "active_licenses": [
+              {
+                "effective_date": "2026-08-15",
+                "expiration_date": "2027-08-15",
+                "granted_at": "2026-08-10T00:00:00Z",
+                "holder_aid": "EApplicant1SAID",
+                "jurisdiction": "US-CA",
+                "license_number": "CA-0001",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              }
+            ],
+            "denied_applications": [],
+            "pending_applications": [],
+            "revoked_licenses": [],
+            "suspended_licenses": []
+          },
+          "name": "application received then granted results in an active license and no pending application"
+        },
+        {
+          "events": [
+            {
+              "payload": {
+                "applicant_aid": "EApplicant2SAID",
+                "application_id": "APP-2",
+                "jurisdiction": "US-CA",
+                "lines_of_business": [
+                  "auto"
+                ],
+                "received_at": "2026-08-01T00:00:00Z"
+              },
+              "type": "application_received"
+            },
+            {
+              "payload": {
+                "application_id": "APP-2",
+                "effective_date": "2026-08-15",
+                "expiration_date": "2027-08-15",
+                "granted_at": "2026-08-10T00:00:00Z",
+                "holder_aid": "EApplicant2SAID",
+                "jurisdiction": "US-CA",
+                "license_number": "CA-0002",
+                "license_said": "ELicense2SAID",
+                "lines_of_business": [
+                  "auto"
+                ]
+              },
+              "type": "license_granted"
+            },
+            {
+              "payload": {
+                "license_said": "ELicense2SAID",
+                "suspended_at": "2026-09-01T00:00:00Z",
+                "suspension_reason": "late filing"
+              },
+              "type": "license_suspended"
+            },
+            {
+              "payload": {
+                "license_said": "ELicense2SAID",
+                "revocation_reason": "failure to remediate",
+                "revoked_at": "2026-10-01T00:00:00Z"
+              },
+              "type": "license_revoked"
+            }
+          ],
+          "expected": {
+            "active_licenses": [],
+            "denied_applications": [],
+            "pending_applications": [],
+            "revoked_licenses": [
+              {
+                "effective_date": "2026-08-15",
+                "expiration_date": "2027-08-15",
+                "granted_at": "2026-08-10T00:00:00Z",
+                "holder_aid": "EApplicant2SAID",
+                "jurisdiction": "US-CA",
+                "license_number": "CA-0002",
+                "license_said": "ELicense2SAID",
+                "lines_of_business": [
+                  "auto"
+                ],
+                "revocation_reason": "failure to remediate",
+                "revoked_at": "2026-10-01T00:00:00Z"
+              }
+            ],
+            "suspended_licenses": []
+          },
+          "name": "license suspended then revoked ends up in revoked_licenses with full fields retained"
+        }
+      ]
     }
   ],
   "commands": [
@@ -582,11 +812,11 @@
     ],
     "imports": []
   },
-  "d": "EAt5GuC9hEqlyicR3xNbUpGRmQejtDYkr2a3vsl66BYZ",
+  "d": "EPfNg_8xVesE74gH68J_u1O7GlKXmoIogiH245fr0Wco",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",
-    "expression_language": "UEL/1.0",
+    "expression_language": "CEL/1.0",
     "id": "regulator-grants-carrier-license",
     "version": "1.0"
   },
@@ -621,10 +851,41 @@
         "empty_state": "No applications awaiting review.",
         "view_type": "table"
       },
-      "fold_expression": "source == 'application_received' ? { rows: state.rows + [{ application_id: event.payload.application_id, applicant_aid: event.payload.applicant_aid, jurisdiction: event.payload.jurisdiction, lines_of_business: event.payload.lines_of_business, received_at: event.payload.received_at }] } : (source == 'license_granted' || source == 'application_denied' || source == 'application_withdrawn') ? { rows: state.rows.filter(r => r.application_id != event.payload.application_id) } : state",
+      "fold": {
+        "application_denied": [
+          {
+            "op": "delete"
+          }
+        ],
+        "application_received": [
+          {
+            "op": "upsert",
+            "set": {
+              "applicant_aid": "event.applicant_aid",
+              "application_id": "event.application_id",
+              "jurisdiction": "event.jurisdiction",
+              "lines_of_business": "event.lines_of_business",
+              "received_at": "event.received_at"
+            }
+          }
+        ],
+        "application_withdrawn": [
+          {
+            "op": "delete"
+          }
+        ],
+        "license_granted": [
+          {
+            "op": "delete"
+          }
+        ]
+      },
       "id": "pending_applications",
       "name": "Pending Applications",
-      "output_schema": {
+      "on_unknown_event": "ignore",
+      "ordering": "source_seq",
+      "primary_key": "application_id",
+      "row_schema": {
         "additionalProperties": false,
         "properties": {
           "rows": {
@@ -667,11 +928,70 @@
         ],
         "type": "object"
       },
+      "shape": "collection",
       "source_events": [
         "application_received",
         "license_granted",
         "application_denied",
         "application_withdrawn"
+      ],
+      "test_vectors": [
+        {
+          "events": [
+            {
+              "payload": {
+                "applicant_aid": "EApplicant1SAID",
+                "application_id": "APP-1",
+                "jurisdiction": "US-CA",
+                "lines_of_business": [
+                  "property"
+                ],
+                "received_at": "2026-08-01T00:00:00Z"
+              },
+              "type": "application_received"
+            }
+          ],
+          "expected": {
+            "rows": {
+              "APP-1": {
+                "applicant_aid": "EApplicant1SAID",
+                "application_id": "APP-1",
+                "jurisdiction": "US-CA",
+                "lines_of_business": [
+                  "property"
+                ],
+                "received_at": "2026-08-01T00:00:00Z"
+              }
+            }
+          },
+          "name": "application received creates a pending_applications row"
+        },
+        {
+          "events": [
+            {
+              "payload": {
+                "applicant_aid": "EApplicant1SAID",
+                "application_id": "APP-1",
+                "jurisdiction": "US-CA",
+                "lines_of_business": [
+                  "property"
+                ],
+                "received_at": "2026-08-01T00:00:00Z"
+              },
+              "type": "application_received"
+            },
+            {
+              "payload": {
+                "application_id": "APP-1"
+              },
+              "type": "license_granted"
+            }
+          ],
+          "expected": {
+            "rows": {}
+          },
+          "name": "application received then granted removes the row from pending_applications"
+        }
       ]
     },
     {
@@ -707,10 +1027,39 @@
         "empty_state": "No active licenses in this jurisdiction.",
         "view_type": "table"
       },
-      "fold_expression": "source == 'license_granted' ? { rows: state.rows + [{ license_said: event.payload.license_said, license_number: event.payload.license_number, holder_aid: event.payload.holder_aid, jurisdiction: event.payload.jurisdiction, lines_of_business: event.payload.lines_of_business, effective_date: event.payload.effective_date, expiration_date: event.payload.expiration_date, granted_at: event.payload.granted_at }] } : source == 'license_reinstated' ? state : (source == 'license_suspended' || source == 'license_revoked') ? { rows: state.rows.filter(r => r.license_said != event.payload.license_said) } : state",
+      "fold": {
+        "license_granted": [
+          {
+            "op": "upsert",
+            "set": {
+              "effective_date": "event.effective_date",
+              "expiration_date": "event.expiration_date",
+              "granted_at": "event.granted_at",
+              "holder_aid": "event.holder_aid",
+              "jurisdiction": "event.jurisdiction",
+              "license_number": "event.license_number",
+              "license_said": "event.license_said",
+              "lines_of_business": "event.lines_of_business"
+            }
+          }
+        ],
+        "license_revoked": [
+          {
+            "op": "delete"
+          }
+        ],
+        "license_suspended": [
+          {
+            "op": "delete"
+          }
+        ]
+      },
       "id": "active_licenses_in_state",
       "name": "Active Licenses In State",
-      "output_schema": {
+      "on_unknown_event": "ignore",
+      "ordering": "source_seq",
+      "primary_key": "license_said",
+      "row_schema": {
         "additionalProperties": false,
         "properties": {
           "rows": {
@@ -767,11 +1116,79 @@
         ],
         "type": "object"
       },
+      "shape": "collection",
       "source_events": [
         "license_granted",
         "license_suspended",
         "license_reinstated",
         "license_revoked"
+      ],
+      "test_vectors": [
+        {
+          "events": [
+            {
+              "payload": {
+                "effective_date": "2026-08-15",
+                "expiration_date": "2027-08-15",
+                "granted_at": "2026-08-10T00:00:00Z",
+                "holder_aid": "EApplicant1SAID",
+                "jurisdiction": "US-CA",
+                "license_number": "CA-0001",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              },
+              "type": "license_granted"
+            }
+          ],
+          "expected": {
+            "rows": {
+              "ELicense1SAID": {
+                "effective_date": "2026-08-15",
+                "expiration_date": "2027-08-15",
+                "granted_at": "2026-08-10T00:00:00Z",
+                "holder_aid": "EApplicant1SAID",
+                "jurisdiction": "US-CA",
+                "license_number": "CA-0001",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              }
+            }
+          },
+          "name": "license granted creates an active_licenses_in_state row"
+        },
+        {
+          "events": [
+            {
+              "payload": {
+                "effective_date": "2026-08-15",
+                "expiration_date": "2027-08-15",
+                "granted_at": "2026-08-10T00:00:00Z",
+                "holder_aid": "EApplicant1SAID",
+                "jurisdiction": "US-CA",
+                "license_number": "CA-0001",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              },
+              "type": "license_granted"
+            },
+            {
+              "payload": {
+                "license_said": "ELicense1SAID"
+              },
+              "type": "license_revoked"
+            }
+          ],
+          "expected": {
+            "rows": {}
+          },
+          "name": "granting then revoking a license leaves no row behind"
+        }
       ]
     }
   ],
@@ -849,55 +1266,55 @@
       "type": "legal_prose"
     },
     {
-      "description": "The carrier's application contains all fields required for license issuance. UEL guess: the command payload (sourced from the application) contains application_id, license_number candidate, jurisdiction, lines_of_business with at least one item, effective_date, and expiration_date.",
-      "expression": "notNull(command.application_id) && notNull(command.license_number) && notNull(command.jurisdiction) && command.lines_of_business.length >= 1 && notNull(command.effective_date) && notNull(command.expiration_date)",
+      "description": "The carrier's application contains all fields required for license issuance: the command payload (sourced from the application) contains application_id, license_number candidate, jurisdiction, lines_of_business with at least one item, effective_date, and expiration_date.",
+      "expression": "notNull(command.application_id) && notNull(command.license_number) && notNull(command.jurisdiction) && size(command.lines_of_business) >= 1 && notNull(command.effective_date) && notNull(command.expiration_date)",
       "id": "applicant_provided_all_required_fields",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "purpose": "auth_precondition",
       "title": "Application complete",
       "type": "predicate"
     },
     {
       "description": "Gates grant_license and spurn_application on the named application_id still being in pending_applications.",
-      "expression": "state.pending_applications.exists(a => a.application_id == command.application_id)",
+      "expression": "state.pending_applications.exists(a, a.application_id == command.application_id)",
       "id": "application_pending_for_grant",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "purpose": "state_precondition",
       "title": "Application is pending and not yet adjudicated",
       "type": "predicate"
     },
     {
       "description": "Gates suspend_license on the named license_said being in active_licenses.",
-      "expression": "state.active_licenses.exists(l => l.license_said == command.license_said)",
+      "expression": "state.active_licenses.exists(l, l.license_said == command.license_said)",
       "id": "license_currently_active",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "purpose": "state_precondition",
       "title": "License is currently active",
       "type": "predicate"
     },
     {
       "description": "Gates reinstate_license on the named license_said being in suspended_licenses.",
-      "expression": "state.suspended_licenses.exists(l => l.license_said == command.license_said)",
+      "expression": "state.suspended_licenses.exists(l, l.license_said == command.license_said)",
       "id": "license_currently_suspended",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "purpose": "state_precondition",
       "title": "License is currently suspended",
       "type": "predicate"
     },
     {
       "description": "Gates revoke_license on the named license_said being either active or suspended (already-revoked licenses cannot be re-revoked).",
-      "expression": "state.active_licenses.exists(l => l.license_said == command.license_said) || state.suspended_licenses.exists(l => l.license_said == command.license_said)",
+      "expression": "state.active_licenses.exists(l, l.license_said == command.license_said) || state.suspended_licenses.exists(l, l.license_said == command.license_said)",
       "id": "license_currently_active_or_suspended",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "purpose": "state_precondition",
       "title": "License is currently active or suspended",
       "type": "predicate"
     },
     {
-      "description": "Required for the activate transition (pending -> active). Confirms the applicant has demonstrated solvency reserves at or above the regulatory minimum. UEL guess: the credential carries a solvency_demonstrated boolean attribute set true by the regulator's review process; in practice this is gated by the regulator's signature on grant_license.",
+      "description": "Required for the activate transition (pending -> active). Confirms the applicant has demonstrated solvency reserves at or above the regulatory minimum. The credential carries a market_conduct_status attribute set by the regulator's review process; in practice this is gated by the regulator's signature on grant_license.",
       "expression": "credential.attributes.market_conduct_status == 'good_standing' || credential.attributes.market_conduct_status == 'under_review'",
       "id": "financial_solvency_demonstrated",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "purpose": "lifecycle_transition_requires",
       "title": "Financial solvency demonstrated for activation",
       "type": "predicate"
@@ -906,16 +1323,16 @@
       "description": "Required for the reinstate transition (suspended -> active). Captures the regulator's determination that the conditions causing suspension have been remediated. The regulator's manual approval of reinstate_license is the operational gate; this predicate is the formal articulation.",
       "expression": "credential.attributes.market_conduct_status == 'good_standing'",
       "id": "suspension_grounds_cleared",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "purpose": "lifecycle_transition_requires",
       "title": "Suspension grounds have been cleared",
       "type": "predicate"
     },
     {
-      "description": "Aggregate invariant: a carrier cannot hold multiple simultaneously active licenses for the same jurisdiction issued by this regulator. UEL guess: groups active_licenses by holder_aid + jurisdiction and asserts cardinality <= 1.",
-      "expression": "state.active_licenses.every(l => state.active_licenses.filter(o => o.holder_aid == l.holder_aid && o.jurisdiction == l.jurisdiction).length == 1)",
+      "description": "Aggregate invariant: a carrier cannot hold multiple simultaneously active licenses for the same jurisdiction issued by this regulator. Groups active_licenses by holder_aid + jurisdiction and asserts cardinality <= 1.",
+      "expression": "state.active_licenses.all(l, size(state.active_licenses.filter(o, o.holder_aid == l.holder_aid && o.jurisdiction == l.jurisdiction)) == 1)",
       "id": "no_duplicate_active_license_per_carrier",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "title": "At most one active license per carrier in this jurisdiction",
       "type": "validation"
     },

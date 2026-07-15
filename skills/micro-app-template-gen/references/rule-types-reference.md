@@ -57,7 +57,7 @@ operators, idiomatic patterns, format pipes, and gotchas — see
   "type": "business_policy",
   "title": "Senior approval for large claims",
   "body": "Claims exceeding $10,000 require senior claims adjuster approval before disbursement.",
-  "expression": "command.amount <= 10000 || principal.holds_credential('senior_adjuster_license', { state: 'active' })",
+  "expression": "command.amount <= 10000 || principal.holdsCredential('senior_adjuster_license', { \"state\": \"active\" })",
   "language": "CEL/1.0"
 }
 ```

@@ -1,9 +1,27 @@
 {
   "aggregates": [
     {
+      "boundary": {
+        "inception_event_type": "registry_inception",
+        "instance_key": "'license_registry'"
+      },
       "description": "Local registry of licenses this carrier has applied for, been granted, or had revoked. Folded from outbound applications and inbound grants/revocations.",
+      "fold": {
+        "application_submitted": [
+          {
+            "op": "append",
+            "target": "applications",
+            "value": "{ \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"submitted_at\": event.submitted_at, \"status\": \"pending\" }"
+          }
+        ],
+        "license_granted": {
+          "expression": "{ \"applications\": state.applications.map(a, a.jurisdiction == event.jurisdiction && a.status == \"pending\" ? { \"jurisdiction\": a.jurisdiction, \"lines_of_business\": a.lines_of_business, \"submitted_at\": a.submitted_at, \"status\": \"granted\" } : a), \"active_licenses\": state.active_licenses + [{ \"license_said\": event.license_said, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"granted_at\": event.granted_at }], \"revoked_licenses\": state.revoked_licenses }"
+        },
+        "license_revoked": {
+          "expression": "{ \"applications\": state.applications, \"active_licenses\": state.active_licenses.filter(l, l.license_said != event.license_said), \"revoked_licenses\": state.revoked_licenses + state.active_licenses.filter(l, l.license_said == event.license_said).map(l, { \"license_said\": l.license_said, \"jurisdiction\": l.jurisdiction, \"revoked_at\": event.revoked_at }) }"
+        }
+      },
       "id": "license_registry",
-      "inception_event_type": "registry_inception",
       "initial_state": {
         "active_licenses": [],
         "applications": [],
@@ -113,7 +131,111 @@
           "revoked_licenses"
         ],
         "type": "object"
-      }
+      },
+      "test_vectors": [
+        {
+          "events": [
+            {
+              "payload": {
+                "jurisdiction": "US-CA",
+                "lines_of_business": [
+                  "property"
+                ],
+                "submitted_at": "2026-08-01T00:00:00Z"
+              },
+              "type": "application_submitted"
+            },
+            {
+              "payload": {
+                "granted_at": "2026-08-10T00:00:00Z",
+                "jurisdiction": "US-CA",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              },
+              "type": "license_granted"
+            }
+          ],
+          "expected": {
+            "active_licenses": [
+              {
+                "granted_at": "2026-08-10T00:00:00Z",
+                "jurisdiction": "US-CA",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              }
+            ],
+            "applications": [
+              {
+                "jurisdiction": "US-CA",
+                "lines_of_business": [
+                  "property"
+                ],
+                "status": "granted",
+                "submitted_at": "2026-08-01T00:00:00Z"
+              }
+            ],
+            "revoked_licenses": []
+          },
+          "name": "application submitted then granted moves it from pending to an active license"
+        },
+        {
+          "events": [
+            {
+              "payload": {
+                "jurisdiction": "US-CA",
+                "lines_of_business": [
+                  "property"
+                ],
+                "submitted_at": "2026-08-01T00:00:00Z"
+              },
+              "type": "application_submitted"
+            },
+            {
+              "payload": {
+                "granted_at": "2026-08-10T00:00:00Z",
+                "jurisdiction": "US-CA",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              },
+              "type": "license_granted"
+            },
+            {
+              "payload": {
+                "license_said": "ELicense1SAID",
+                "revoked_at": "2026-09-01T00:00:00Z"
+              },
+              "type": "license_revoked"
+            }
+          ],
+          "expected": {
+            "active_licenses": [],
+            "applications": [
+              {
+                "jurisdiction": "US-CA",
+                "lines_of_business": [
+                  "property"
+                ],
+                "status": "granted",
+                "submitted_at": "2026-08-01T00:00:00Z"
+              }
+            ],
+            "revoked_licenses": [
+              {
+                "jurisdiction": "US-CA",
+                "license_said": "ELicense1SAID",
+                "revoked_at": "2026-09-01T00:00:00Z"
+              }
+            ]
+          },
+          "name": "granting then revoking a license moves it to revoked_licenses"
+        }
+      ]
     }
   ],
   "commands": [
@@ -139,7 +261,6 @@
         }
       ],
       "id": "submit_application",
-      "idempotency_key_expression": "hash(payload.jurisdiction + ':' + payload.lines_of_business.sort().join(','))",
       "name": "Submit license application",
       "payload_schema": {
         "additionalProperties": false,
@@ -216,11 +337,11 @@
       }
     ]
   },
-  "d": "EKWa05YClt7wT3cp99noQHfuVocp7VDNQnQrrxHYxkLN",
+  "d": "EG8LHuJ2yY6ynTd68v8oxs1SqlWGaqK5WGCyICSqCf6R",
   "header": {
     "description": "The carrier's side of license application: a startup insurance carrier submits an application to a state regulator and processes the resulting grant or revocation. Pivotal event: an application has been submitted and adjudicated.",
     "display_name": "Carrier Applies for License",
-    "expression_language": "UEL/1.0",
+    "expression_language": "CEL/1.0",
     "id": "carrier-applies-for-license",
     "version": "1.0"
   },
@@ -249,10 +370,30 @@
         "empty_state": "No active licenses yet. Submit an application to get started.",
         "view_type": "table"
       },
-      "fold_expression": "event.type == 'license_granted' ? { rows: state.rows.concat([{ license_said: event.payload.license_said, jurisdiction: event.payload.jurisdiction, lines_of_business: event.payload.lines_of_business, granted_at: event.payload.granted_at }]) } : event.type == 'license_revoked' ? { rows: state.rows.filter(r => r.license_said != event.payload.license_said) } : state",
+      "fold": {
+        "license_granted": [
+          {
+            "op": "upsert",
+            "set": {
+              "granted_at": "event.granted_at",
+              "jurisdiction": "event.jurisdiction",
+              "license_said": "event.license_said",
+              "lines_of_business": "event.lines_of_business"
+            }
+          }
+        ],
+        "license_revoked": [
+          {
+            "op": "delete"
+          }
+        ]
+      },
       "id": "my_active_licenses",
       "name": "My Active Licenses",
-      "output_schema": {
+      "on_unknown_event": "ignore",
+      "ordering": "source_seq",
+      "primary_key": "license_said",
+      "row_schema": {
         "additionalProperties": false,
         "properties": {
           "rows": {
@@ -291,9 +432,65 @@
         ],
         "type": "object"
       },
+      "shape": "collection",
       "source_events": [
         "license_granted",
         "license_revoked"
+      ],
+      "test_vectors": [
+        {
+          "events": [
+            {
+              "payload": {
+                "granted_at": "2026-08-10T00:00:00Z",
+                "jurisdiction": "US-CA",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              },
+              "type": "license_granted"
+            }
+          ],
+          "expected": {
+            "rows": {
+              "ELicense1SAID": {
+                "granted_at": "2026-08-10T00:00:00Z",
+                "jurisdiction": "US-CA",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              }
+            }
+          },
+          "name": "license granted creates a my_active_licenses row"
+        },
+        {
+          "events": [
+            {
+              "payload": {
+                "granted_at": "2026-08-10T00:00:00Z",
+                "jurisdiction": "US-CA",
+                "license_said": "ELicense1SAID",
+                "lines_of_business": [
+                  "property"
+                ]
+              },
+              "type": "license_granted"
+            },
+            {
+              "payload": {
+                "license_said": "ELicense1SAID"
+              },
+              "type": "license_revoked"
+            }
+          ],
+          "expected": {
+            "rows": {}
+          },
+          "name": "granting then revoking a license leaves no row behind"
+        }
       ]
     }
   ],
@@ -355,27 +552,27 @@
   },
   "rules": [
     {
-      "description": "The carrier may not submit a new application for a jurisdiction in which they already hold an active license. UEL guess: checks license_registry for an active license whose jurisdiction matches the proposed application.",
-      "expression": "state.active_licenses.filter(l => l.jurisdiction == command.payload.jurisdiction).length == 0",
+      "description": "The carrier may not submit a new application for a jurisdiction in which they already hold an active license: checks license_registry for an active license whose jurisdiction matches the proposed application.",
+      "expression": "size(state.active_licenses.filter(l, l.jurisdiction == command.jurisdiction)) == 0",
       "id": "no_active_license_for_jurisdiction",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "purpose": "state_precondition",
       "title": "No active license for this jurisdiction",
       "type": "predicate"
     },
     {
-      "description": "Aggregate invariant: a carrier cannot hold multiple simultaneous active licenses for the same jurisdiction. UEL guess: groups active_licenses by jurisdiction and asserts cardinality <= 1.",
-      "expression": "state.active_licenses.every(l => state.active_licenses.filter(o => o.jurisdiction == l.jurisdiction).length == 1)",
+      "description": "Aggregate invariant: a carrier cannot hold multiple simultaneous active licenses for the same jurisdiction. Groups active_licenses by jurisdiction and asserts cardinality <= 1.",
+      "expression": "state.active_licenses.all(l, size(state.active_licenses.filter(o, o.jurisdiction == l.jurisdiction)) == 1)",
       "id": "no_duplicate_active_license_per_jurisdiction",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "title": "At most one active license per jurisdiction",
       "type": "validation"
     },
     {
-      "description": "Whether the granted license credential's terms match what the carrier applied for. UEL guess: jurisdiction matches submitted application and lines_of_business is a subset of submitted lines_of_business.",
-      "expression": "credential.attributes.jurisdiction == workflow.context.application.jurisdiction && credential.attributes.lines_of_business.every(l => workflow.context.application.lines_of_business.includes(l))",
+      "description": "Whether the granted license credential's terms match what the carrier applied for: jurisdiction matches submitted application and lines_of_business is a subset of submitted lines_of_business.",
+      "expression": "credential.attributes.jurisdiction == workflow.context.application.jurisdiction && credential.attributes.lines_of_business.all(l, l in workflow.context.application.lines_of_business)",
       "id": "license_terms_acceptable",
-      "language": "UEL/1.0",
+      "language": "CEL/1.0",
       "purpose": "workflow_branch_condition",
       "title": "License terms acceptable",
       "type": "predicate"
