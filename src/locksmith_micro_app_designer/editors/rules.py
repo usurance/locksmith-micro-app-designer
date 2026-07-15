@@ -241,7 +241,7 @@ class _RuleSectionPane(QWidget):
                 self._details_holder.addWidget(l_w)
             expr = entry.get("expression", "")
             self._details_holder.addWidget(DarkCodeBlock(expr))
-            cheat = QLabel("↗ UEL/1.0 cheat-sheet · test expression")
+            cheat = QLabel("↗ CEL/1.0 cheat-sheet · test expression")
             cheat.setStyleSheet("color:#0ABFB0;font-size:10px;")
             self._details_holder.addWidget(cheat)
         elif rtype == "binding_link":
