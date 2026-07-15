@@ -68,7 +68,9 @@ Per-step questions to ask an SME. Pick the primary question first; ask follow-up
 
 **Follow-ups per aggregate:**
 - *"What history must I read to know if a command is valid?"* — that's the aggregate
-- *"What's its identifier and how is it minted? (inception event)"*
+- *"What's its identifier and how is it minted? (inception event)"* — the `boundary.inception_event_type`; also ask *"which field on the event picks out one instance from another?"* — the `boundary.instance_key`
+- *"Walk each event type this aggregate cares about — for each, what happens to the state? Is it a simple field set/append/remove (an op list), or does it need a full custom reducer (a raw CEL expression)?"* — this builds the `fold` handler map, one entry per event type
+- *"What test vectors prove each fold handler does what you just said? Give me a couple of `(events in) → (state out)` examples per handler."* — `test_vectors`
 - *"What invariants does it protect? (plain English; will become validation rules)"*
 - *"Is this log private, witnessed, or shared with others?"*
 
@@ -101,6 +103,11 @@ Per-step questions to ask an SME. Pick the primary question first; ask follow-up
 **Follow-ups per projection:**
 - *"What question does this answer?"*
 - *"Which event streams does it fold over?"*
+- *"Is this a list of rows, or one single summary document?"* — `shape`: `collection` (rows) or `object` (one folded document, no `primary_key`)
+- *"For a `collection` shape: what field (or expression over the event) picks out which row an incoming event updates?"* — `primary_key`
+- *"Do those event streams come from more than one log? If so, what ordering can you rely on — the single-source order, sort by timestamp, or does the fold have to work in any order?"* — `ordering` (`source_seq` | `datetime_said` | `commutative`)
+- *"Walk each event type — for each, does it add/update a row, remove one, or replace the whole document?"* — builds the `fold` handler map, same op-list/raw-reducer duality as an aggregate
+- *"What test vectors prove each handler does what you just said?"* — `test_vectors`
 - *"What's the output shape? (Locksmith will render this as a table, list, cards, kanban, timeline, or summary)"*
 - *"Who's allowed to see each row? (credential-gated row filter)"*
 

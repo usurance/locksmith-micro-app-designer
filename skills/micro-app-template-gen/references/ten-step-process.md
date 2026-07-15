@@ -56,7 +56,7 @@ Let the SME override defaults. The flags are deployment-readiness *expectations*
 | `header.display_name` | Title case label |
 | `header.description` | The pivotal event statement + 1-2 sentences of context |
 | `header.version` | Semver |
-| `header.expression_language` | `"UEL/1.0"` (default for now) |
+| `header.expression_language` | `"CEL/1.0"` (default for now) |
 | `header.forked_from` | Optional |
 
 **Save:** Write `header` and `role` fields. The template is now structurally minimal-valid (other primitives are empty arrays).
@@ -170,14 +170,14 @@ Stamp the SAIDs with `python scripts/saidify_acdc_schema.py schemas/{credential_
 1. **Route** — exn route following naming conventions (see `naming-conventions.md`). Must not start with `/ipex/`.
 2. **Counterparty role** — who receives this command, if any
 3. **Payload schema** — JSON-Schema for the actor's input (Locksmith renders as a form)
-4. **Authorization (KERI-native)** — every externally-invocable command declares `authz`: `open` (any authenticated AID), `aid`/`allowlist` (specific AID(s)), or `credential` (`schema_said` [+ optional `issuer`]). Never express authorization as a UEL predicate — that is a defect (see `docs/BE-KERI-NATIVE.md`). `auth_preconditions` are for *non-authz* validation only (payload completeness, state guards).
+4. **Authorization (KERI-native)** — every externally-invocable command declares `authz`: `open` (any authenticated AID), `aid`/`allowlist` (specific AID(s)), or `credential` (`schema_said` [+ optional `issuer`]). Never express authorization as a CEL predicate — that is a defect (see the BE-KERI-NATIVE doc). `auth_preconditions` are for *non-authz* validation only (payload completeness, state guards).
 5. **Preconditions** — state (forward-ref rules), temporal (forward-ref rules)
 6. **Emissions** — what fires on success: exchange (IPEX or exn out), lifecycle_advance (advance a credential's state), aggregate_event (append to a local aggregate)
 
 **Anti-patterns:**
 
 - ❌ Using `/ipex/*` for app-defined commands — reserved for protocol
-- ❌ Expressing authorization as a UEL predicate in `auth_preconditions` — use the `authz` field instead
+- ❌ Expressing authorization as a CEL predicate in `auth_preconditions` — use the `authz` field instead
 
 ## Step 5 — Aggregates
 
@@ -198,7 +198,7 @@ Aggregates are typically TEL-backed (when tracking credential lifecycle) or KEL-
 For each reaction:
 
 1. **Trigger** — credential_received (with imported_credential_id + optional ipex_verb), exn_received (with route), lifecycle_event (with credential and state), or scheduled (with cadence)
-2. **Authorization (KERI-native)** — every externally-invocable reaction declares `authz`: `open` (any authenticated AID), `aid`/`allowlist` (specific AID(s)), or `credential` (`schema_said` [+ optional `issuer`]). Never express authorization as a UEL predicate — that is a defect (see `docs/BE-KERI-NATIVE.md`). `auth_preconditions` are for *non-authz* validation only (payload completeness, state guards).
+2. **Authorization (KERI-native)** — every externally-invocable reaction declares `authz`: `open` (any authenticated AID), `aid`/`allowlist` (specific AID(s)), or `credential` (`schema_said` [+ optional `issuer`]). Never express authorization as a CEL predicate — that is a defect (see the BE-KERI-NATIVE doc). `auth_preconditions` are for *non-authz* validation only (payload completeness, state guards).
 3. **Emissions** — same shape as command emissions
 4. **Failure policy** — `log_and_continue` | `log_and_spurn` | `abort`; optional timeout_seconds
 
@@ -232,7 +232,7 @@ For each:
 
 1. **Source events** — names of event types to fold
 2. **Output schema** — JSON-Schema for the resulting state
-3. **Fold expression** — UEL over `{ state, event, source }` producing new state
+3. **Fold** — CEL handler map (op list or raw reducer) over `{ row, event }` (or `{ state, event }` for `object`-shape projections) producing the row/state
 4. **Access** — row_filter (rule_ref), lens_template
 5. **Display** — view_type (table | list | cards | kanban | timeline | summary), columns, default_sort, empty_state
 

@@ -2,9 +2,9 @@
 
 Detailed guidance for each rule type, with worked examples.
 
-For UEL/1.0 expression syntax — bound contexts per `purpose`, available
+For CEL/1.0 expression syntax — bound contexts per `purpose`, available
 operators, idiomatic patterns, format pipes, and gotchas — see
-`uel-1.0-cheat-sheet.md`.
+`cel-1.0-cheat-sheet.md`.
 
 ## `legal_prose`
 
@@ -58,7 +58,7 @@ operators, idiomatic patterns, format pipes, and gotchas — see
   "title": "Senior approval for large claims",
   "body": "Claims exceeding $10,000 require senior claims adjuster approval before disbursement.",
   "expression": "command.amount <= 10000 || principal.holds_credential('senior_adjuster_license', { state: 'active' })",
-  "language": "UEL/1.0"
+  "language": "CEL/1.0"
 }
 ```
 
@@ -81,7 +81,7 @@ operators, idiomatic patterns, format pipes, and gotchas — see
 - `derived_membership` — derived-role membership
 
 Each purpose has a different bound context (which variables are in scope).
-See `uel-1.0-cheat-sheet.md` §1 for the table.
+See `cel-1.0-cheat-sheet.md` §2 for the table.
 
 **Worked example:**
 
@@ -91,9 +91,9 @@ See `uel-1.0-cheat-sheet.md` §1 for the table.
   "type": "predicate",
   "purpose": "lifecycle_transition_requires",
   "title": "Issuer must be active regulator",
-  "description": "Transition to active requires the issuer to hold a current regulator credential.",
-  "expression": "issuer.holds_credential('regulator_authority', { state: 'active' })",
-  "language": "UEL/1.0"
+  "description": "Transition to active requires the issuer to be a currently-recognized regulator, per this role's locally-tracked registry.",
+  "expression": "credential.issuer in state.recognized_regulator_aids",
+  "language": "CEL/1.0"
 }
 ```
 
@@ -113,7 +113,7 @@ See `uel-1.0-cheat-sheet.md` §1 for the table.
   "title": "Premium derivation",
   "description": "Premium is base_rate × risk_multiplier × term_months ÷ 12.",
   "expression": "attributes.base_rate * attributes.risk_multiplier * attributes.term_months / 12",
-  "language": "UEL/1.0",
+  "language": "CEL/1.0",
   "result_attribute": "attributes.premium"
 }
 ```
@@ -133,8 +133,8 @@ See `uel-1.0-cheat-sheet.md` §1 for the table.
   "type": "validation",
   "title": "At most one active license per jurisdiction",
   "description": "A carrier cannot hold multiple active licenses for the same jurisdiction simultaneously.",
-  "expression": "state.active_licenses.filter(l => l.jurisdiction == event.payload.jurisdiction).length <= 1",
-  "language": "UEL/1.0"
+  "expression": "size(state.active_licenses.filter(l, l.jurisdiction == event.jurisdiction)) <= 1",
+  "language": "CEL/1.0"
 }
 ```
 
