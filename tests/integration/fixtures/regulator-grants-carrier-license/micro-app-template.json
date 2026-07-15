@@ -461,7 +461,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_granted",
           "kind": "aggregate_event",
-          "payload_mapping": "{ license_number: command.license_number, jurisdiction: command.jurisdiction, lines_of_business: command.lines_of_business, effective_date: command.effective_date, expiration_date: command.expiration_date, application_id: command.application_id, granted_at: event.timestamp }"
+          "payload_mapping": "{ \"license_number\": command.license_number, \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"effective_date\": command.effective_date, \"expiration_date\": command.expiration_date, \"application_id\": command.application_id, \"granted_at\": event.timestamp }"
         }
       ],
       "id": "grant_license",
@@ -552,7 +552,7 @@
           "aggregate_id": "license_registry",
           "event_type": "application_denied",
           "kind": "aggregate_event",
-          "payload_mapping": "{ application_id: command.application_id, denial_reason: command.denial_reason, denied_at: event.timestamp }"
+          "payload_mapping": "{ \"application_id\": command.application_id, \"denial_reason\": command.denial_reason, \"denied_at\": event.timestamp }"
         }
       ],
       "id": "spurn_application",
@@ -598,7 +598,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_suspended",
           "kind": "aggregate_event",
-          "payload_mapping": "{ license_said: command.license_said, suspension_reason: command.suspension_reason, suspended_at: event.timestamp }"
+          "payload_mapping": "{ \"license_said\": command.license_said, \"suspension_reason\": command.suspension_reason, \"suspended_at\": event.timestamp }"
         }
       ],
       "id": "suspend_license",
@@ -645,7 +645,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_reinstated",
           "kind": "aggregate_event",
-          "payload_mapping": "{ license_said: command.license_said, reinstatement_note: command.reinstatement_note, reinstated_at: event.timestamp }"
+          "payload_mapping": "{ \"license_said\": command.license_said, \"reinstatement_note\": command.reinstatement_note, \"reinstated_at\": event.timestamp }"
         }
       ],
       "id": "reinstate_license",
@@ -692,7 +692,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_revoked",
           "kind": "aggregate_event",
-          "payload_mapping": "{ license_said: command.license_said, revocation_reason: command.revocation_reason, revoked_at: event.timestamp }"
+          "payload_mapping": "{ \"license_said\": command.license_said, \"revocation_reason\": command.revocation_reason, \"revoked_at\": event.timestamp }"
         }
       ],
       "id": "revoke_license",
@@ -812,7 +812,7 @@
     ],
     "imports": []
   },
-  "d": "EPfNg_8xVesE74gH68J_u1O7GlKXmoIogiH245fr0Wco",
+  "d": "EPGq3tE4SU3U3snSdhwgUZJRJGactB5Do785mmC-o2a6",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",
@@ -1203,7 +1203,7 @@
           "aggregate_id": "license_registry",
           "event_type": "application_received",
           "kind": "aggregate_event",
-          "payload_mapping": "{ application_id: event.payload.application_id, applicant_aid: event.actorAID, jurisdiction: event.payload.jurisdiction, lines_of_business: event.payload.lines_of_business, received_at: event.timestamp }"
+          "payload_mapping": "{ \"application_id\": event.payload.application_id, \"applicant_aid\": event.actorAID, \"jurisdiction\": event.payload.jurisdiction, \"lines_of_business\": event.payload.lines_of_business, \"received_at\": event.timestamp }"
         }
       ],
       "failure_policy": {
@@ -1226,7 +1226,7 @@
           "aggregate_id": "license_registry",
           "event_type": "application_withdrawn",
           "kind": "aggregate_event",
-          "payload_mapping": "{ application_id: event.payload.application_id, withdrawn_at: event.timestamp }"
+          "payload_mapping": "{ \"application_id\": event.payload.application_id, \"withdrawn_at\": event.timestamp }"
         }
       ],
       "failure_policy": {

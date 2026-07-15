@@ -257,7 +257,7 @@
           "aggregate_id": "license_registry",
           "event_type": "application_submitted",
           "kind": "aggregate_event",
-          "payload_mapping": "{ jurisdiction: payload.jurisdiction, lines_of_business: payload.lines_of_business, submitted_at: event.timestamp }"
+          "payload_mapping": "{ \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"submitted_at\": event.timestamp }"
         }
       ],
       "id": "submit_application",
@@ -337,7 +337,7 @@
       }
     ]
   },
-  "d": "EG8LHuJ2yY6ynTd68v8oxs1SqlWGaqK5WGCyICSqCf6R",
+  "d": "EEgsJaYSB-07nBf_HieNDX-7c8A6D6RLDhYxe9UTEmAi",
   "header": {
     "description": "The carrier's side of license application: a startup insurance carrier submits an application to a state regulator and processes the resulting grant or revocation. Pivotal event: an application has been submitted and adjudicated.",
     "display_name": "Carrier Applies for License",
@@ -502,7 +502,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_granted",
           "kind": "aggregate_event",
-          "payload_mapping": "{ license_said: credential.d, jurisdiction: credential.attributes.jurisdiction, lines_of_business: credential.attributes.lines_of_business, granted_at: event.timestamp }"
+          "payload_mapping": "{ \"license_said\": credential.d, \"jurisdiction\": credential.attributes.jurisdiction, \"lines_of_business\": credential.attributes.lines_of_business, \"granted_at\": event.timestamp }"
         }
       ],
       "failure_policy": {
@@ -523,7 +523,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_revoked",
           "kind": "aggregate_event",
-          "payload_mapping": "{ license_said: credential.d, jurisdiction: credential.attributes.jurisdiction, revoked_at: event.timestamp }"
+          "payload_mapping": "{ \"license_said\": credential.d, \"jurisdiction\": credential.attributes.jurisdiction, \"revoked_at\": event.timestamp }"
         }
       ],
       "failure_policy": {

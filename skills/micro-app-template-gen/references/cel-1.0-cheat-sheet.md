@@ -118,9 +118,13 @@ comma — CEL has no arrow-lambda syntax):
 There is no `.find(pred)`, `.count(pred)`, `.distinct`, `.groupBy(...)`,
 `.first`/`.last`, or bare `.length` property in core CEL — see §4 and §5.
 
-**Record:** `obj.field`, `obj.nested.field`; build with `{ a: x, b: y }`.
-CEL map literals have **no spread operator** — there is no
-`{ ...base, b: y }`. Compose fields explicitly, or use the profile's
+**Record:** `obj.field`, `obj.nested.field`; build with
+`{ "a": x, "b": y }`. Map-literal keys MUST be quoted strings: a key
+position is itself a CEL expression, so a bare identifier key
+(`{ a: x }`) evaluates `a` as a variable — an unbound-name error, not a
+field name (verified failure on `cel-python` 0.5.0; see §8). CEL map
+literals also have **no spread operator** — there is no
+`{ ...base, "b": y }`. Compose fields explicitly, or use the profile's
 `omit`/`pick` functions (§5) to derive a shaped copy of an existing map.
 
 **Lists:** `[a, b, c]`; concat with `xs + ys`
@@ -155,7 +159,7 @@ table; templates may not.
 |---|---|---|---|
 | `notNull(x)` | `(T?) → bool` | Presence check | `notNull(state.assigned_adjuster)` |
 | `said(value)` | `(any) → said` | Compute the SAID of a canonical-JSON value | `said(payload) == event.said` |
-| `principal.holdsCredential(type, constraints)` | `(string, map) → bool` | Credential-possession predicate — **auth slots only** | `principal.holdsCredential("CarrierLicense", { state: "active" })` |
+| `principal.holdsCredential(type, constraints)` | `(string, map) → bool` | Credential-possession predicate — **auth slots only** | `principal.holdsCredential("CarrierLicense", { "state": "active" })` |
 | `omit(map, fields)` | `(map<string, any>, list<string>) → map<string, any>` | Copy of `map` without the named fields | `omit(row, ["holder_aid"])` |
 | `pick(map, fields)` | `(map<string, any>, list<string>) → map<string, any>` | Copy of `map` with only the named fields | `pick(row, ["policy_said", "jurisdiction"])` |
 | `distinct(list)` | `(list<T>) → list<T>` | Unique elements, order-preserving, receiver-style | `xs.distinct()` |
@@ -183,7 +187,7 @@ principal.credentials.exists(c, c.type == "CarrierLicense" && !c.revoked)
 The pinned profile function is the shorthand:
 
 ```
-principal.holdsCredential("CarrierLicense", { state: "active" })
+principal.holdsCredential("CarrierLicense", { "state": "active" })
 ```
 
 Use the shorthand when the spec or example shows it; use `.exists(...)`
@@ -226,7 +230,7 @@ equivalent):
 ```json
 "fold": {
   "license_granted": [
-    { "op": "append", "target": "state", "value": "{ license_said: event.said, jurisdiction: event.jurisdiction, granted_at: event.granted_at }" }
+    { "op": "append", "target": "state", "value": "{ \"license_said\": event.said, \"jurisdiction\": event.jurisdiction, \"granted_at\": event.granted_at }" }
   ],
   "license_revoked": [
     { "op": "remove", "target": "state", "where": "item.license_said == event.license_said" }
@@ -245,7 +249,7 @@ state.filter(l, l.license_said != event.license_said)
 
 ```
 row.holder_aid == principal.aid
-|| principal.holdsCredential("carrier_license", { state: "active" })
+|| principal.holdsCredential("carrier_license", { "state": "active" })
 ```
 
 **Per-principal lens** (projection `lens_rule_ref` — a `computational` rule
@@ -300,6 +304,14 @@ expressions, write the conversion directly (e.g. `c.said` not
 
 ## 8. Gotchas (real bugs)
 
+- **Map-literal keys MUST be quoted strings.** A map literal's key position
+  is a full CEL expression, not a JS-style identifier shorthand:
+  `{ said: event.said }` evaluates `said` as a *variable* (an
+  unbound-name error at evaluation time — verified failure on
+  `cel-python` 0.5.0, whose grammar reads `mapinits : expr ":" expr`).
+  Write `{ "said": event.said }`. Bare keys often *compile* and only
+  blow up when evaluated, so a parse-check alone won't catch them.
+
 - **No `.contains()` on lists.** Use the `in` operator: `y in xs` (was
   `xs.exists(x => x == y)` in UEL; now `y in xs` natively — no macro
   needed).
@@ -323,7 +335,7 @@ expressions, write the conversion directly (e.g. `c.said` not
 - **Heterogeneous list literals feeding a schema-typed field are
   rejected.** `[1, "x"]` doesn't type-check against a uniform-element
   `state_schema`/`row_schema` array field; a record-literal list
-  (`[{ a: 1 }, { a: 2 }]`) is fine.
+  (`[{ "a": 1 }, { "a": 2 }]`) is fine.
 
 - **Ternary branches must unify.** `cond ? state + [x] : null` is rejected
   because `list<T>` and `null` don't unify; use `cond ? state + [x] : state`.
