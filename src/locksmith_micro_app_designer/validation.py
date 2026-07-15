@@ -145,7 +145,13 @@ class ValidationEngine:
         raw = _validate_template(doc, schema_path=self.meta_schema_path)
         errors: list[ValidationIssue] = []
         warnings: list[ValidationIssue] = []
-        for r in raw.errors:
+        # `raw.errors` and `raw.warnings` are the underlying validator's two
+        # input lists (see template/validate.py's `validate_fold_semantics`,
+        # e.g. the §14.5 vector-coverage lint, which populates `.warnings`);
+        # bucket by each item's own `severity` rather than trusting which
+        # input list it arrived in, since severity is the single source of
+        # truth for what the Designer's validation panel should show.
+        for r in (*raw.errors, *raw.warnings):
             wrapped = _wrap(r)
             (errors if wrapped.severity == "error" else warnings).append(wrapped)
         return ValidationReport(

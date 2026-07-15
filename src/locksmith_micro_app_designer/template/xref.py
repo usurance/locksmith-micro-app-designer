@@ -200,13 +200,20 @@ def validate_xrefs(doc: dict[str, Any]) -> list[XrefError]:
                         reference=hid, target_type="credentials.imports",
                     ))
 
-    # projections[].access.row_filter_rule_ref
+    # projections[].access.row_filter_rule_ref / lens_rule_ref
     for i, p in enumerate(doc.get("projections", [])):
-        rr = p.get("access", {}).get("row_filter_rule_ref")
+        access = p.get("access") or {}
+        rr = access.get("row_filter_rule_ref")
         if rr is not None and rr not in rule_ids:
             errors.append(XrefError(
                 path=f"projections[{i}].access.row_filter_rule_ref",
                 reference=rr, target_type="rule",
+            ))
+        lr = access.get("lens_rule_ref")
+        if lr is not None and lr not in rule_ids:
+            errors.append(XrefError(
+                path=f"projections[{i}].access.lens_rule_ref",
+                reference=lr, target_type="rule",
             ))
 
     # rules[].links (binding_link references)

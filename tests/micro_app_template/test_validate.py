@@ -189,6 +189,18 @@ from locksmith_micro_app_designer.template.xref import validate_xrefs
         },
         "missing-rule",
     ),
+    # projection access lens_rule_ref
+    (
+        {
+            "rules": [],
+            "projections": [{
+                "id": "p1", "name": "p", "description": "p",
+                "source_events": ["e1"], "output_schema": {}, "fold_expression": "state",
+                "access": {"lens_rule_ref": "missing-lens-rule"},
+            }],
+        },
+        "missing-lens-rule",
+    ),
     # rule binding_link links
     (
         {
@@ -364,12 +376,20 @@ def test_aggregate_validates(minimal_valid_template):
     minimal_valid_template["aggregates"].append({
         "id": "license_registry",
         "description": "Tracks carrier license lifecycle.",
-        "inception_event_type": "license_received",
+        "boundary": {
+            "inception_event_type": "license_received",
+            "instance_key": "event.license_id",
+        },
         "state_schema": {
             "type": "object",
             "properties": {"active": {"type": "array"}}
         },
         "initial_state": {"active": []},
+        "fold": {
+            "license_received": [
+                {"op": "append", "target": "active", "value": "event.license_id"}
+            ]
+        },
         "invariants": [],
         "log_scope": "private"
     })
@@ -446,11 +466,21 @@ def test_projection_validates(minimal_valid_template):
         "name": "Active Policies",
         "description": "Currently in-force policies.",
         "source_events": ["policy_issued", "policy_revoked"],
-        "output_schema": {
-            "type": "array",
-            "items": {"type": "object"}
+        "shape": "collection",
+        "primary_key": "policy_id",
+        "row_schema": {
+            "type": "object",
+            "properties": {"policy_id": {"type": "string"}}
         },
-        "fold_expression": "state + [event.payload]",
+        "fold": {
+            "policy_issued": [
+                {"op": "upsert", "set": {"policy_id": "event.policy_id"}}
+            ],
+            "policy_revoked": [
+                {"op": "delete"}
+            ]
+        },
+        "ordering": "source_seq",
         "display": {
             "view_type": "table",
             "columns": [{"field": "policy_id", "header": "Policy"}],
@@ -546,6 +576,171 @@ def test_legal_prose_requires_body(minimal_valid_template):
     })
     errors = validate_against_meta_schema(minimal_valid_template, META_SCHEMA)
     assert any("body" in e.message for e in errors)
+
+
+# --- Stage 5: fold-model semantic checks (accepted spec §14.2, §14.5) -----------------
+# JSON-Schema already enforces the fold-model *structure* (boundary/fold/shape/
+# primary_key/row_schema/ordering/on_unknown_event/test_vectors) via the amended
+# meta-schema -- see test_aggregate_validates / test_projection_validates above. The
+# two checks below are cross-field semantics no JSON-Schema keyword can express.
+
+from locksmith_micro_app_designer.template.validate import validate_fold_semantics
+
+
+def test_vector_coverage_floor_is_a_warning_not_an_error(minimal_valid_template):
+    """§14.5 (deferred question, assigned to this stage): an aggregate/projection
+    with zero test_vectors is a *lint warning* in v1, not a hard validation
+    failure -- the proposal in the accepted spec ("warn in v1, decide after the
+    first real templates")."""
+    minimal_valid_template["aggregates"].append({
+        "id": "no_vectors_agg",
+        "description": "d",
+        "boundary": {"inception_event_type": "e", "instance_key": "event.id"},
+        "state_schema": {}, "initial_state": {},
+        "fold": {"e": [{"op": "set", "target": "x", "value": "1"}]},
+        "invariants": [], "log_scope": "private",
+        # test_vectors omitted entirely.
+    })
+    result = validate_template(minimal_valid_template, META_SCHEMA)
+    assert result.is_valid, "a missing test_vectors[] must not fail validation"
+    assert result.errors == []
+    assert any(
+        "no_vectors_agg" in w.message or "test_vectors" in w.path
+        for w in result.warnings
+    )
+    assert all(w.severity == "warning" for w in result.warnings)
+
+
+def test_vector_coverage_present_produces_no_warning(minimal_valid_template):
+    minimal_valid_template["aggregates"].append({
+        "id": "with_vectors_agg",
+        "description": "d",
+        "boundary": {"inception_event_type": "e", "instance_key": "event.id"},
+        "state_schema": {}, "initial_state": {},
+        "fold": {"e": [{"op": "set", "target": "x", "value": "1"}]},
+        "invariants": [], "log_scope": "private",
+        "test_vectors": [
+            {"name": "v1", "events": [{"type": "e", "payload": {}}], "expected": {"x": 1}},
+        ],
+    })
+    errors, warnings = validate_fold_semantics(minimal_valid_template)
+    assert errors == []
+    assert warnings == []
+
+
+def test_commutative_ordering_forbids_raw_reducer_handlers():
+    """§14.2: 'commutative ordering forbids raw reducers' -- the likely rule the
+    accepted spec proposes for its own open question, since commutativity is
+    undecidable for an arbitrary raw CEL reducer but is a static whitelist check
+    for the op vocabulary."""
+    doc = {
+        "projections": [{
+            "id": "counter",
+            "name": "Counter",
+            "description": "d",
+            "source_events": ["bumped"],
+            "shape": "object",
+            "state_schema": {}, "initial_state": {"n": 0},
+            "ordering": "commutative",
+            "fold": {
+                "bumped": {"expression": '{ "n": state.n + event.amount }'},
+            },
+        }],
+    }
+    errors, _warnings = validate_fold_semantics(doc)
+    assert any(
+        "commutative" in e.message and "counter" in e.message
+        for e in errors
+    )
+
+
+def test_commutative_ordering_allows_whitelisted_ops():
+    """An op-list handler under `ordering: "commutative"` is fine -- the op
+    vocabulary is the whitelist the validator can statically prove commutes."""
+    doc = {
+        "projections": [{
+            "id": "counter",
+            "name": "Counter",
+            "description": "d",
+            "source_events": ["bumped"],
+            "shape": "object",
+            "state_schema": {}, "initial_state": {"n": 0},
+            "ordering": "commutative",
+            "fold": {
+                "bumped": [{"op": "increment", "target": "n", "by": "event.amount"}],
+            },
+            "test_vectors": [
+                {"name": "v", "events": [{"type": "bumped", "payload": {"amount": 1}}],
+                 "expected": {"n": 1}},
+            ],
+        }],
+    }
+    errors, warnings = validate_fold_semantics(doc)
+    assert errors == []
+    assert warnings == []
+
+
+def test_non_commutative_ordering_permits_raw_reducers():
+    doc = {
+        "projections": [{
+            "id": "counter",
+            "name": "Counter",
+            "description": "d",
+            "source_events": ["bumped"],
+            "shape": "object",
+            "state_schema": {}, "initial_state": {"n": 0},
+            "ordering": "source_seq",
+            "fold": {
+                "bumped": {"expression": '{ "n": state.n + event.amount }'},
+            },
+            "test_vectors": [
+                {"name": "v", "events": [{"type": "bumped", "payload": {"amount": 1}}],
+                 "expected": {"n": 1}},
+            ],
+        }],
+    }
+    errors, warnings = validate_fold_semantics(doc)
+    assert errors == []
+    assert warnings == []
+
+
+def test_validation_engine_surfaces_vector_coverage_as_a_warning_not_an_error(
+    minimal_valid_template,
+):
+    """End-to-end through the Designer's ValidationEngine adapter
+    (validation.py), not just the raw validate_fold_semantics() helper --
+    guards against the adapter only reading raw.errors and silently
+    dropping raw.warnings (a real bug found and fixed in this stage: the
+    adapter never populated ValidationReport.warnings before)."""
+    from locksmith_micro_app_designer.validation import ValidationEngine
+
+    minimal_valid_template["aggregates"].append({
+        "id": "no_vectors_agg",
+        "description": "d",
+        "boundary": {"inception_event_type": "e", "instance_key": "event.id"},
+        "state_schema": {}, "initial_state": {},
+        "fold": {"e": [{"op": "set", "target": "x", "value": "1"}]},
+        "invariants": [], "log_scope": "private",
+    })
+    report = ValidationEngine(META_SCHEMA).validate(minimal_valid_template)
+    assert report.is_valid
+    assert report.errors == ()
+    assert any("no_vectors_agg" in w.message for w in report.warnings)
+    assert all(w.severity == "warning" for w in report.warnings)
+
+
+def test_both_worked_examples_pass_fold_semantics_cleanly(fixtures_dir):
+    import json
+    examples_dir = (
+        Path(__file__).parent.parent.parent
+        / "skills/micro-app-template-gen/references/examples"
+    )
+    for name in ("carrier-license-application", "regulator-grants-carrier-license"):
+        with open(examples_dir / name / "micro-app-template.json") as f:
+            doc = json.load(f)
+        errors, warnings = validate_fold_semantics(doc)
+        assert errors == [], f"{name}: unexpected fold-semantics errors: {errors}"
+        assert warnings == [], f"{name}: unexpected vector-coverage warnings: {warnings}"
 
 
 METADATA_SCHEMA = Path(__file__).parent.parent.parent / "docs/superpowers/specs/schemas/metadata.schema.json"
