@@ -56,7 +56,7 @@ The 10-step process is **rigid in order**. Step N's questions depend on Step N-1
 Plus:
 
 - **Adversarial review** (between Step 10 and save) — walk `references/adversarial-prompts.md` checklist
-- **Saidify and validate** — run `scripts/micro_app_saidify.py --in-place` then `scripts/micro_app_validate.py`
+- **Saidify and validate** — run `scripts/micro_app_saidify.py --in-place` then `scripts/micro_app_validate.py --lint` (meta-schema + xrefs + SAD/SAID + ACDC-schema compliance)
 
 ## Reference files
 
@@ -87,6 +87,8 @@ Plus:
 - ❌ Skipping Step 9 (rules) — most contractual and enforcement substance lives there
 - ❌ Skipping the adversarial review — the highest-value step
 - ❌ Inventing schema SAIDs — they must be content-addressed
+- ❌ Re-serializing a saidified schema with sorted keys — the `$id` binds to the file's key order
+- ❌ Shipping a schema without a `version` field ("major.minor.patch") — the linter rejects it (ACDC Schema Versioning MUST)
 - ❌ Authoring an attribute-only export schema — an ACDC schema is the full *envelope* (`v/d/i/ri/s/a.oneOf`); the SME's attributes nest under `a.oneOf[1]` with `d/i/dt`. A top-level attribute schema fails ACDC issuance (`'<field>' is a required property`). See ten-step §Step 3.
 - ❌ Authoring on `/ipex/*` routes — reserved for protocol
 - ❌ Conflating imported credentials with exported credentials — different lists, different purposes
@@ -115,7 +117,12 @@ A directory at `docs/micro-apps/{role-id}-{use-case-id}/` containing:
     └── ...
 ```
 
-All files canonical JSON (sorted keys, two-space indent). Template has `d` field set to the computed SAID. Metadata's `for_micro_app_said` matches the template's `d`. Each schema file is its own JSON-Schema document with its own SAID computed via `scripts/saidify_acdc_schema.py` (existing utility) or the same saidify recipe.
+`micro-app-template.json` and `metadata.json` are canonical JSON (sorted keys, two-space
+indent). Template has `d` field set to the computed SAID. Metadata's `for_micro_app_said`
+matches the template's `d`. Each schema file is its own JSON-Schema document with its own
+SAID computed via `scripts/saidify_acdc_schema.py` (existing utility). **Schema files are
+insertion-order-sensitive**: their `$id` SAIDs hash the file's key order as written (kli
+saidify semantics), so never re-serialize a saidified schema with sorted keys.
 
 ## Validation
 
@@ -123,8 +130,18 @@ Before declaring done:
 
 ```bash
 source .venv/bin/activate
-python scripts/micro_app_validate.py --input docs/micro-apps/{path}/micro-app-template.json
+python scripts/micro_app_validate.py --input docs/micro-apps/{path}/micro-app-template.json --lint
 python scripts/micro_app_saidify.py --input docs/micro-apps/{path}/micro-app-template.json --verify
 ```
 
 Both must exit 0.
+
+`--lint` runs the SAD/SAID + ACDC-schema compliance linter over the whole template
+directory (checks S01–S09 per `schemas/*.json`, T01–T07 cross-file; catalog in
+`docs/superpowers/specs/2026-07-16-acdc-schema-compliance-linter-design.md`). It verifies
+every `$id` SAID by recomputation, the `$schema` dialect, the mandatory `version` field,
+static-schema `$ref` rules, compact-form-first `oneOf` ordering, reserved-label integrity,
+edge-block operators/pins, and that every SAID pinned in the template resolves to a local
+schema. Well-formed SAIDs that don't resolve locally (e.g. an imported credential's schema
+living in the counterparty's template dir) are **warnings** ("assumed external"), not
+failures. Requires keripy (Locksmith venv).
