@@ -1,10 +1,11 @@
 {
-  "$id": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb",
+  "$id": "EBSxJSWpGHcTyBYOreTj1NKBudwU5xHPA8pw003XCTDc",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Carrier License Application",
   "description": "A carrier's self-attested application to underwrite named lines of business in a US jurisdiction. Self-issued (issuer = issuee = the carrier) and presented to a state Department of Insurance via IPEX. The granted carrier_license edges back to the exact (immutable, SAID-addressed) version adjudicated.",
   "type": "object",
   "credentialType": "CarrierLicenseApplication",
+  "version": "1.0.0",
   "properties": {
     "v": {
       "description": "ACDC version string.",

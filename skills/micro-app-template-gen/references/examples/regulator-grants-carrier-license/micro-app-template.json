@@ -447,7 +447,7 @@
             "exported_credential_id": "carrier_license",
             "imported_credential_id": null,
             "kind": "credential",
-            "schema_said_referenced": "ENIhMZdlSsMGOw7qMkE8VHcSS9RdEC1-aBom-R9cX42x",
+            "schema_said_referenced": "EOBjUL6H9FQdr_PlXVU_cv_iaXdK5Pg8L3M2YQrnHivI",
             "verb": "grant"
           },
           "kind": "exchange"
@@ -549,7 +549,7 @@
             "exported_credential_id": null,
             "imported_credential_id": "carrier_license_application",
             "kind": "credential",
-            "schema_said_referenced": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb",
+            "schema_said_referenced": "EBSxJSWpGHcTyBYOreTj1NKBudwU5xHPA8pw003XCTDc",
             "verb": "spurn"
           },
           "kind": "exchange"
@@ -834,7 +834,7 @@
         ],
         "schema": {
           "schema_path": "schemas/carrier_license.json",
-          "schema_said": "ENIhMZdlSsMGOw7qMkE8VHcSS9RdEC1-aBom-R9cX42x"
+          "schema_said": "EOBjUL6H9FQdr_PlXVU_cv_iaXdK5Pg8L3M2YQrnHivI"
         },
         "value_flow": {
           "implied_credentials": []
@@ -844,7 +844,7 @@
     "imports": [
       {
         "expected_issuer_role": "carrier",
-        "expected_schema_said": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb",
+        "expected_schema_said": "EBSxJSWpGHcTyBYOreTj1NKBudwU5xHPA8pw003XCTDc",
         "id": "carrier_license_application",
         "lifecycle_acceptance": [
           "issued"
@@ -853,13 +853,13 @@
       }
     ]
   },
-  "d": "EPL4VQTpubtKlu1Qm52yvbH6gZWYENOO4W4sixltahB5",
+  "d": "ENqd2iGFI4gFnV7IOhTosN5yMudPfZpe-0uQv1u8zB3D",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",
     "expression_language": "CEL/1.0",
     "id": "regulator-grants-carrier-license",
-    "version": "1.1"
+    "version": "1.2"
   },
   "projections": [
     {

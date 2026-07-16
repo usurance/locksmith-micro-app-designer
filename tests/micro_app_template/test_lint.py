@@ -413,16 +413,16 @@ def test_f02_unparseable_schema(compliant_template_dir):
     "regulator-grants-carrier-license",
     "carrier-license-application",
 ])
-def test_worked_examples_pin_known_findings(name):
-    """The bundled examples MUST fail S05 (missing schema version) and
-    nothing else at error severity. Fixing them re-SAIDs the schemas and
-    cascades into locksmith CarrierPlugin trust constants -- an owner-
-    scheduled migration. If this test starts failing because S05 stops
-    firing, the migration happened: update this test, not the linter."""
+def test_worked_examples_fully_compliant(name):
+    """The bundled examples are fully lint-compliant since the 2026-07-16
+    schema-version migration (owner-scheduled): `version` was added to both
+    carrier schemas, re-SAIDing them and re-pinning every reference
+    (templates, locksmith CarrierPlugin trust constant, concierge-api
+    doi.py/deploy.json, integration fixtures, ugard mirrors). Only the
+    expected cross-template external-SAID warnings remain."""
     result = lint_template_dir(EXAMPLES / name)
-    assert _codes(result.errors) == {"S05"}
-    schema_count = len(list((EXAMPLES / name / "schemas").glob("*.json")))
-    assert len(result.errors) == schema_count
+    assert result.errors == []
+    assert result.is_compliant is True
     assert _codes(result.warnings) <= {"T03", "T04", "T06", "T07"}
     if name == "regulator-grants-carrier-license":
         # The regulator imports the carrier's application schema (external)

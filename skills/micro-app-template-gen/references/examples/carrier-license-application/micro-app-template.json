@@ -256,7 +256,7 @@
             "exported_credential_id": "carrier_license_application",
             "imported_credential_id": null,
             "kind": "credential",
-            "schema_said_referenced": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb",
+            "schema_said_referenced": "EBSxJSWpGHcTyBYOreTj1NKBudwU5xHPA8pw003XCTDc",
             "verb": "grant"
           },
           "kind": "exchange"
@@ -407,14 +407,14 @@
         "rule_refs": [],
         "schema": {
           "schema_path": "schemas/carrier_license_application.json",
-          "schema_said": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb"
+          "schema_said": "EBSxJSWpGHcTyBYOreTj1NKBudwU5xHPA8pw003XCTDc"
         }
       }
     ],
     "imports": [
       {
         "expected_issuer_role": "state-doi",
-        "expected_schema_said": "ENIhMZdlSsMGOw7qMkE8VHcSS9RdEC1-aBom-R9cX42x",
+        "expected_schema_said": "EOBjUL6H9FQdr_PlXVU_cv_iaXdK5Pg8L3M2YQrnHivI",
         "id": "carrier_license",
         "lifecycle_acceptance": [
           "active"
@@ -423,13 +423,13 @@
       }
     ]
   },
-  "d": "ELSNIRIKeVcY7Hdty2ElI-Coz3ZpfkxrkBGqNrCbiGxv",
+  "d": "EBTP1zVbY_KjEBlafARtCwJPyD-cKPFknUL08AazZJDP",
   "header": {
     "description": "The carrier's side of license application: a startup insurance carrier submits an application to a state regulator and processes the resulting grant or revocation. Pivotal event: an application has been submitted and adjudicated.",
     "display_name": "Carrier Applies for License",
     "expression_language": "CEL/1.0",
     "id": "carrier-applies-for-license",
-    "version": "1.1"
+    "version": "1.2"
   },
   "projections": [
     {

@@ -1,10 +1,11 @@
 {
-  "$id": "ENIhMZdlSsMGOw7qMkE8VHcSS9RdEC1-aBom-R9cX42x",
+  "$id": "EOBjUL6H9FQdr_PlXVU_cv_iaXdK5Pg8L3M2YQrnHivI",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Carrier License",
   "description": "License authorizing an entity to bear insurance risk in a jurisdiction. Issued by a state Department of Insurance to a regulated insurance carrier following review and adjudication of a carrier_license_application.",
   "type": "object",
   "credentialType": "CarrierLicense",
+  "version": "1.0.0",
   "properties": {
     "v": {
       "description": "ACDC version string.",
@@ -126,7 +127,7 @@
           "type": "string"
         },
         {
-          "$id": "EC3cGWy20BUPxr-owG3LTzE09XM4qD1tJUL9Yy9cTgmF",
+          "$id": "EEULdGjIbxoLm8Orxj5Hp3oJ9g1Bp0se5rBxjhWjNaMx",
           "description": "Edges chaining this license to the application it adjudicates.",
           "type": "object",
           "properties": {
@@ -145,7 +146,7 @@
                 "s": {
                   "description": "Schema SAID of carrier_license_application.",
                   "type": "string",
-                  "const": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb"
+                  "const": "EBSxJSWpGHcTyBYOreTj1NKBudwU5xHPA8pw003XCTDc"
                 },
                 "o": {
                   "description": "Edge operator: NI2I (not-issuer-to-issuee).",
