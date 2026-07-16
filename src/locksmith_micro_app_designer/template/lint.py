@@ -26,7 +26,10 @@ from locksmith_micro_app_designer.template.schema_said import (
 )
 
 ACDC_DIALECT = "https://json-schema.org/draft/2020-12/schema"
-SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
+SEMVER_RE = re.compile(r"\d+\.\d+\.\d+")
+# Top-level compactable section properties (a/e/r): compact-form-first is
+# normative here even when the author forgot the expanded variant's $id.
+SECTION_PATHS = ("properties.a", "properties.e", "properties.r")
 EDGE_OPERATORS = ("I2I", "NI2I", "DI2I")
 DYNAMIC_REF_KEYWORDS = (
     "$dynamicRef", "$dynamicAnchor", "$recursiveRef", "$recursiveAnchor",
@@ -141,7 +144,7 @@ def lint_schema_doc(doc: dict[str, Any], file: str) -> list[LintFinding]:
 
     # S05 -- version present, major.minor.patch
     version = doc.get("version")
-    if not isinstance(version, str) or not SEMVER_RE.match(version):
+    if not isinstance(version, str) or not SEMVER_RE.fullmatch(version):
         findings.append(LintFinding(
             file, "version", "S05",
             f"version field must be present in 'major.minor.patch' form "
@@ -173,7 +176,11 @@ def lint_schema_doc(doc: dict[str, Any], file: str) -> list[LintFinding]:
                     "'sad:SAID', or 'did:...')",
                 ))
 
-    # S07 -- compact-form-first (ACDC most-compact-form constraint R35)
+    # S07 -- compact-form-first (ACDC most-compact-form constraint R35).
+    # A oneOf is treated as a compactable section iff an expanded variant
+    # carries a $id, or it sits at a top-level section property (a/e/r).
+    # A plain string-or-object data union in an attribute payload is
+    # legitimate JSON-Schema authoring and is NOT gated.
     for path, node in _walk(doc):
         oneof = node.get("oneOf")
         if not isinstance(oneof, list):
@@ -182,8 +189,9 @@ def lint_schema_doc(doc: dict[str, Any], file: str) -> list[LintFinding]:
             _is_expanded_variant(br) and SAID_LABEL in br for br in oneof
         )
         has_expanded = any(_is_expanded_variant(br) for br in oneof)
+        is_section = path in SECTION_PATHS
         compact_idx = [i for i, br in enumerate(oneof) if _is_compact_variant(br)]
-        if not (has_saided_expanded or (has_expanded and compact_idx)):
+        if not (has_saided_expanded or (is_section and has_expanded)):
             continue  # not a compactable-section oneOf
         if not compact_idx:
             findings.append(LintFinding(
@@ -265,21 +273,32 @@ def _iter_edge_blocks(
     expanded variant(s) of the top-level `e` section.
 
     An edge definition is any object-typed property of the expanded e-block
-    other than the reserved labels d/u/o.
+    other than the reserved labels d/u/o. Handles both the canonical
+    oneOf-wrapped section and an e section authored directly as an object
+    block (the latter is an S07 smell but must not escape S09/T06).
     """
     e_section = doc.get("properties", {}).get("e")
     if not isinstance(e_section, dict):
         return
-    for i, branch in enumerate(e_section.get("oneOf", [])):
-        if not _is_expanded_variant(branch):
+    oneof = e_section.get("oneOf")
+    if isinstance(oneof, list):
+        branches = [
+            (f"properties.e.oneOf[{i}]", br)
+            for i, br in enumerate(oneof) if _is_expanded_variant(br)
+        ]
+    elif isinstance(e_section.get("properties"), dict):
+        branches = [("properties.e", e_section)]
+    else:
+        branches = []
+    for base, branch in branches:
+        props = branch.get("properties")
+        if not isinstance(props, dict):
             continue
-        for name, sub in branch.get("properties", {}).items():
+        for name, sub in props.items():
             if name in ("d", "u", "o"):
                 continue
             if isinstance(sub, dict) and sub.get("type") == "object":
-                yield (
-                    f"properties.e.oneOf[{i}].properties.{name}", name, sub,
-                )
+                yield (f"{base}.properties.{name}", name, sub)
 
 
 def collect_edge_schema_pins(doc: dict[str, Any]) -> list[tuple[str, str]]:
@@ -304,15 +323,23 @@ _SAID_REF_KEYS = ("expected_schema_said", "schema_said_referenced", "schema_said
 
 
 def _load_json(path: Path, rel: str, findings: list[LintFinding]) -> Any | None:
-    """Load a JSON file; on absence/parse failure record F01/F02 and return None."""
+    """Load a JSON object file; on absence, parse failure, or a non-object
+    root record F01/F02 and return None."""
     if not path.exists():
         findings.append(LintFinding(rel, "", "F01", f"{rel} not found"))
         return None
     try:
-        return json.loads(path.read_text())
+        doc = json.loads(path.read_text())
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         findings.append(LintFinding(rel, "", "F02", f"unparseable JSON: {e}"))
         return None
+    if not isinstance(doc, dict):
+        findings.append(LintFinding(
+            rel, "", "F02",
+            f"JSON root must be an object, got {type(doc).__name__}",
+        ))
+        return None
+    return doc
 
 
 def _iter_template_said_refs(
@@ -372,14 +399,25 @@ def lint_template_dir(template_dir: Path) -> LintResult:
             ))
 
         # T02 -- export schema pins
-        exports = (template.get("credentials") or {}).get("exports") or []
+        credentials = template.get("credentials")
+        credentials = credentials if isinstance(credentials, dict) else {}
+        exports = credentials.get("exports")
+        exports = exports if isinstance(exports, list) else []
         for i, export in enumerate(exports):
+            if not isinstance(export, dict):
+                continue
             schema_ref = export.get("schema")
             if not isinstance(schema_ref, dict):
                 continue
             base = f"credentials.exports[{i}].schema"
             schema_path = schema_ref.get("schema_path")
             schema_said = schema_ref.get("schema_said")
+            if schema_said is not None and not is_bare_said(schema_said):
+                findings.append(LintFinding(
+                    TEMPLATE_FILE, f"{base}.schema_said", "T02",
+                    f"schema_said {schema_said!r} is not a well-formed bare "
+                    "SAID",
+                ))
             if schema_path:
                 referenced_paths.add(schema_path)
                 if schema_path not in schema_docs:
@@ -428,22 +466,27 @@ def lint_template_dir(template_dir: Path) -> LintResult:
                 ))
 
     # T06 -- edge `s` const pins resolve against known SAIDs
-    known_saids = set(local_saids) | referenced_saids
+    pin_saids: set[str] = set()
+    all_pins: list[tuple[str, str, str]] = []
     for rel, doc in schema_docs.items():
         for path, said in collect_edge_schema_pins(doc):
-            if said not in known_saids:
-                findings.append(LintFinding(
-                    rel, path, "T06",
-                    f"edge schema pin {said!r} does not resolve to a local "
-                    "schema $id or any template-referenced SAID -- assumed "
-                    "external",
-                    severity="warning",
-                ))
+            all_pins.append((rel, path, said))
+            pin_saids.add(said)
+    known_saids = set(local_saids) | referenced_saids
+    for rel, path, said in all_pins:
+        if said not in known_saids:
+            findings.append(LintFinding(
+                rel, path, "T06",
+                f"edge schema pin {said!r} does not resolve to a local "
+                "schema $id or any template-referenced SAID -- assumed "
+                "external",
+                severity="warning",
+            ))
 
-    # T07 -- orphan schema files
+    # T07 -- orphan schema files (edge pins count as references too)
     for rel, doc in schema_docs.items():
         said = doc.get(SAID_LABEL)
-        if rel not in referenced_paths and said not in referenced_saids:
+        if rel not in referenced_paths and said not in (referenced_saids | pin_saids):
             findings.append(LintFinding(
                 rel, "", "T07",
                 "schema file is not referenced by any export schema_path, "

@@ -103,9 +103,9 @@ violation or SAID/xref integrity failure (exit 1); `warning` = unverifiable-loca
 | S04 | `$schema` present and exactly `"https://json-schema.org/draft/2020-12/schema"` (ACDC 1.0) | error |
 | S05 | `version` present and `major.minor.patch` (`^\d+\.\d+\.\d+$`) — ACDC Schema Versioning: "version field MUST be present" | error |
 | S06 | Static-schema rules: no `$dynamicRef`/`$dynamicAnchor`/`$recursiveRef`/`$recursiveAnchor` anywhere; every `$ref` is local (`#...`) or a static SAIDified reference (bare SAID, `sad:SAID`, `did:...`); `http(s)://` refs forbidden | error |
-| S07 | Compact-form-first (R35): in any `oneOf` that contains both a string-typed (compact SAID) variant and an object variant carrying `$id`, the compact variant is **first** | error |
+| S07 | Compact-form-first (R35): a `oneOf` is a compactable section iff an object variant carries `$id`, **or** it sits at a top-level section property (`properties.a`/`e`/`r`) and has any object variant. In a compactable section the compact (string SAID) variant must exist and be **first**, and every expanded variant must carry `$id` (reported as S02). Plain string-or-object data unions inside attribute payloads are not gated. | error |
 | S08 | Reserved labels (`d`,`u`,`i`,`rd`,`dt`,`n`,`o`,`w`,`l`,`cargo`) declared in any `properties` map at any depth must be type-compatible with the ACDC reserved-field table (`d/u/i/rd/dt/n/o/l`: string; `w`: string or number; `cargo`: any). Divergent declared type = redefinition | error |
-| S09 | Edge blocks (expanded `e`-section variant): every edge property object requires `n`; a `const`-pinned `o` must be one of `I2I`/`NI2I`/`DI2I`; a `const`-pinned `s` must be a well-formed bare SAID | error |
+| S09 | Edge blocks (expanded `e`-section variant, including an `e` section authored directly as an object without the `oneOf` wrapper): every edge property object requires `n`; a `const`-pinned `o` must be one of `I2I`/`NI2I`/`DI2I`; a `const`-pinned `s` must be a well-formed bare SAID | error |
 
 **Template/dir level — cross-file:**
 
@@ -173,8 +173,9 @@ scheduled migration, out of scope here.
 - keripy import failure raises at `--lint` invocation with a message pointing at the Locksmith
   venv convention (`~/code/locksmith/.venv`); the no-flag path never imports keri via lint.
 - File-level failures get their own codes: `F01` (expected file missing) and `F02` (unparseable
-  JSON), both error severity. All per-file checks are independent: one broken schema file doesn't
-  mask findings in others.
+  JSON, or a JSON root that is not an object), both error severity. All per-file checks are
+  independent: one broken schema file doesn't mask findings in others. Malformed nested shapes
+  (non-dict export entries, `credentials` as a string, ...) are skipped defensively, never crash.
 - Malformed SAID strings in template reference fields are errors (T03/T04 "well-formed" half), not
   external warnings — external status is only granted to values that parse as SAIDs.
 

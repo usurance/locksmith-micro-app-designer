@@ -424,3 +424,127 @@ def test_worked_examples_pin_known_findings(name):
     schema_count = len(list((EXAMPLES / name / "schemas").glob("*.json")))
     assert len(result.errors) == schema_count
     assert _codes(result.warnings) <= {"T03", "T04", "T06", "T07"}
+    if name == "regulator-grants-carrier-license":
+        # The regulator imports the carrier's application schema (external)
+        # and spurns against it -- these external warnings MUST fire.
+        assert {"T03", "T04"} <= _codes(result.warnings)
+
+
+# ---------------------------------------------------------------------------
+# Review-hardening round (whole-range review findings 1-7)
+# ---------------------------------------------------------------------------
+
+
+def test_s05_trailing_newline_version_rejected():
+    doc = make_compliant_schema()
+    doc["version"] = "1.0.0\n"
+    assert "S05" in _codes(lint_schema_doc(_resaidify(doc), "f"))
+
+
+def test_s07_plain_data_union_not_flagged():
+    """A string-or-object union in an attribute payload is legitimate
+    JSON-Schema authoring, not a compactable section -- no S07/S02."""
+    doc = make_compliant_schema()
+    doc["properties"]["a"]["oneOf"][1]["properties"]["contact"] = {
+        "description": "Free-form contact.",
+        "oneOf": [
+            {"description": "Structured.", "type": "object",
+             "properties": {"email": {"type": "string"}}},
+            {"description": "Plain string.", "type": "string"},
+        ],
+    }
+    codes = _codes(lint_schema_doc(_resaidify(doc), "f"))
+    assert "S07" not in codes and "S02" not in codes
+
+
+def test_s07_top_level_section_still_gated_without_saided_variant():
+    """Top-level a/e/r sections are compactable by definition: an expanded
+    variant with no $id still draws S02, and a missing compact variant S07."""
+    doc = make_compliant_schema()
+    del doc["properties"]["a"]["oneOf"][1]["$id"]
+    doc = saidify_schema_block(doc)
+    assert "S02" in _codes(lint_schema_doc(doc, "f"))
+
+
+def test_s09_direct_object_e_section_checked():
+    """An e section authored as a direct object (no oneOf) must not escape
+    S09 edge checks."""
+    doc = make_compliant_schema()
+    doc["properties"]["e"] = {
+        "description": "Edges.",
+        "type": "object",
+        "properties": {
+            "d": {"description": "Edge block SAID.", "type": "string"},
+            "application": {
+                "description": "Edge.",
+                "type": "object",
+                "properties": {
+                    "n": {"description": "Node SAID.", "type": "string"},
+                    "o": {"description": "Operator.", "type": "string",
+                          "const": "X2X"},
+                },
+                "required": ["n", "o"],
+            },
+        },
+        "required": ["d", "application"],
+    }
+    assert "S09" in _codes(lint_schema_doc(_resaidify(doc), "f"))
+
+
+def test_t02_malformed_export_schema_said(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    template["credentials"]["exports"][0]["schema"] = {
+        "schema_path": None,
+        "schema_said": "not-a-said",
+    }
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    assert "T02" in _codes(r.errors)
+
+
+def test_t07_schema_referenced_only_by_edge_pin_not_orphan(compliant_template_dir):
+    """A local schema referenced ONLY by another schema's edge pin is not an
+    orphan (spec T07: '...or edge pin')."""
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    target = make_compliant_schema()
+    target["title"] = "Edge Target Credential"
+    target = saidify_schema_block(target)
+    pinning = make_schema_with_edges(target["$id"])
+    template["credentials"]["exports"][0]["schema"]["schema_said"] = pinning["$id"]
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(
+        compliant_template_dir, template, metadata,
+        {"test_credential.json": pinning, "edge_target.json": target},
+    )
+    r = lint_template_dir(compliant_template_dir)
+    assert "T07" not in _codes(r.findings)
+    assert "T06" not in _codes(r.findings)  # pin resolves locally too
+
+
+def test_non_dict_artifacts_degrade_to_findings(compliant_template_dir):
+    """Parseable-but-non-object JSON must produce findings, not crashes."""
+    (compliant_template_dir / "schemas/arr.json").write_text("[]\n")
+    r = lint_template_dir(compliant_template_dir)
+    assert any(f.code == "F02" and f.file == "schemas/arr.json" for f in r.errors)
+
+    (compliant_template_dir / "metadata.json").write_text("[]\n")
+    r = lint_template_dir(compliant_template_dir)
+    assert any(f.code == "F02" and f.file == "metadata.json" for f in r.errors)
+
+    (compliant_template_dir / "micro-app-template.json").write_text("[1, 2]\n")
+    r = lint_template_dir(compliant_template_dir)  # must not raise
+    assert any(
+        f.code == "F02" and f.file == "micro-app-template.json"
+        for f in r.errors
+    )
+
+
+def test_malformed_nested_template_shapes_do_not_crash(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    template["credentials"]["exports"].append("not-an-object")
+    template["commands"] = "not-a-list"
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    lint_template_dir(compliant_template_dir)  # must not raise
