@@ -11,11 +11,11 @@
           {
             "op": "append",
             "target": "applications",
-            "value": "{ \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"submitted_at\": event.submitted_at, \"status\": \"pending\" }"
+            "value": "{ \"application_said\": event.application_said, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"submitted_at\": event.submitted_at, \"status\": \"pending\" }"
           }
         ],
         "license_granted": {
-          "expression": "{ \"applications\": state.applications.map(a, a.jurisdiction == event.jurisdiction && a.status == \"pending\" ? { \"jurisdiction\": a.jurisdiction, \"lines_of_business\": a.lines_of_business, \"submitted_at\": a.submitted_at, \"status\": \"granted\" } : a), \"active_licenses\": state.active_licenses + [{ \"license_said\": event.license_said, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"granted_at\": event.granted_at }], \"revoked_licenses\": state.revoked_licenses }"
+          "expression": "{ \"applications\": state.applications.map(a, a.jurisdiction == event.jurisdiction && a.status == \"pending\" ? { \"application_said\": a.application_said, \"jurisdiction\": a.jurisdiction, \"lines_of_business\": a.lines_of_business, \"submitted_at\": a.submitted_at, \"status\": \"granted\" } : a), \"active_licenses\": state.active_licenses + [{ \"license_said\": event.license_said, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"granted_at\": event.granted_at }], \"revoked_licenses\": state.revoked_licenses }"
         },
         "license_revoked": {
           "expression": "{ \"applications\": state.applications, \"active_licenses\": state.active_licenses.filter(l, l.license_said != event.license_said), \"revoked_licenses\": state.revoked_licenses + state.active_licenses.filter(l, l.license_said == event.license_said).map(l, { \"license_said\": l.license_said, \"jurisdiction\": l.jurisdiction, \"revoked_at\": event.revoked_at }) }"
@@ -69,6 +69,9 @@
           "applications": {
             "items": {
               "properties": {
+                "application_said": {
+                  "type": "string"
+                },
                 "jurisdiction": {
                   "type": "string"
                 },
@@ -92,6 +95,7 @@
                 }
               },
               "required": [
+                "application_said",
                 "jurisdiction",
                 "lines_of_business",
                 "submitted_at",
@@ -137,6 +141,7 @@
           "events": [
             {
               "payload": {
+                "application_said": "EApp1SAID",
                 "jurisdiction": "US-CA",
                 "lines_of_business": [
                   "property"
@@ -170,6 +175,7 @@
             ],
             "applications": [
               {
+                "application_said": "EApp1SAID",
                 "jurisdiction": "US-CA",
                 "lines_of_business": [
                   "property"
@@ -186,6 +192,7 @@
           "events": [
             {
               "payload": {
+                "application_said": "EApp1SAID",
                 "jurisdiction": "US-CA",
                 "lines_of_business": [
                   "property"
@@ -217,6 +224,7 @@
             "active_licenses": [],
             "applications": [
               {
+                "application_said": "EApp1SAID",
                 "jurisdiction": "US-CA",
                 "lines_of_business": [
                   "property"
@@ -245,13 +253,18 @@
       "emissions": [
         {
           "exchange": {
-            "exported_credential_id": null,
+            "exported_credential_id": "carrier_license_application",
             "imported_credential_id": null,
             "kind": "credential",
-            "schema_said_referenced": null,
-            "verb": "apply"
+            "schema_said_referenced": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb",
+            "verb": "grant"
           },
           "kind": "exchange"
+        },
+        {
+          "exported_credential_id": "carrier_license_application",
+          "kind": "lifecycle_advance",
+          "to_state": "issued"
         },
         {
           "aggregate_id": "license_registry",
@@ -281,7 +294,9 @@
                 "life",
                 "health",
                 "auto",
-                "workers_comp"
+                "workers_compensation",
+                "marine",
+                "aviation"
               ],
               "type": "string"
             },
@@ -306,6 +321,35 @@
             ],
             "type": "object"
           },
+          "representations": {
+            "additionalProperties": false,
+            "description": "Financial representations attested by the applicant.",
+            "properties": {
+              "naic_number": {
+                "description": "NAIC company code, if assigned.",
+                "type": "string"
+              },
+              "solvency_attestation": {
+                "description": "Applicant attests reserves are at or above the regulatory minimum.",
+                "type": "boolean"
+              },
+              "solvency_reserves_usd": {
+                "description": "Attested solvency reserves in USD.",
+                "minimum": 0,
+                "type": "number"
+              },
+              "years_in_operation": {
+                "description": "Years the carrier entity has operated.",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "solvency_reserves_usd",
+              "solvency_attestation"
+            ],
+            "type": "object"
+          },
           "submitted_at": {
             "description": "Carrier-stated date/time of submission. Client-supplied (the Locksmith UI auto-fills the client clock at send time): the command's {command, state} binding has no runtime clock.",
             "format": "date-time",
@@ -317,6 +361,7 @@
           "lines_of_business",
           "applicant_legal_name",
           "primary_contact",
+          "representations",
           "submitted_at"
         ],
         "type": "object"
@@ -330,26 +375,61 @@
     }
   ],
   "credentials": {
-    "exports": [],
+    "exports": [
+      {
+        "description": "A carrier's self-attested application to underwrite named lines of business in a jurisdiction. Held and presented to a state DOI via IPEX; the granted carrier_license edges back to the exact version adjudicated.",
+        "envelope": {
+          "disclosure_mode": "full",
+          "edges": [],
+          "holder_role": "carrier",
+          "verifier_roles": [
+            "state-doi"
+          ]
+        },
+        "id": "carrier_license_application",
+        "lifecycle": {
+          "initial": "issued",
+          "states": [
+            "issued",
+            "superseded"
+          ],
+          "transitions": [
+            {
+              "from": "issued",
+              "id": "supersede",
+              "tel_primitive": "update",
+              "to": "superseded",
+              "trigger": "manual"
+            }
+          ]
+        },
+        "name": "Carrier License Application",
+        "rule_refs": [],
+        "schema": {
+          "schema_path": "schemas/carrier_license_application.json",
+          "schema_said": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb"
+        }
+      }
+    ],
     "imports": [
       {
         "expected_issuer_role": "state-doi",
-        "expected_schema_said": "EAA00000000000000000000000000000000000000TBD",
+        "expected_schema_said": "ENIhMZdlSsMGOw7qMkE8VHcSS9RdEC1-aBom-R9cX42x",
         "id": "carrier_license",
         "lifecycle_acceptance": [
           "active"
         ],
-        "narrative": "Type declaration for the license credential this carrier is applying for. As a startup the carrier has no active instance yet; this entry exists so reactions and workflows can reference the credential type. Schema SAID is TBD until the regulator's micro-app fixes it."
+        "narrative": "Type declaration for the license credential this carrier is applying for. As a startup the carrier has no active instance yet; this entry exists so reactions and workflows can reference the credential type."
       }
     ]
   },
-  "d": "ELkoOKnyL8CABfPUgWqNB9Hl1yWjisPPDkiS_4lsomNT",
+  "d": "ELSNIRIKeVcY7Hdty2ElI-Coz3ZpfkxrkBGqNrCbiGxv",
   "header": {
     "description": "The carrier's side of license application: a startup insurance carrier submits an application to a state regulator and processes the resulting grant or revocation. Pivotal event: an application has been submitted and adjudicated.",
     "display_name": "Carrier Applies for License",
     "expression_language": "CEL/1.0",
     "id": "carrier-applies-for-license",
-    "version": "1.0"
+    "version": "1.1"
   },
   "projections": [
     {

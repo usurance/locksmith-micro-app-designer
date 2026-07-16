@@ -1,5 +1,5 @@
 {
-  "$id": "ELK09oTcRiiv-Zmxl-rjKo6EVyOLV-5o4SK96g1kSUie",
+  "$id": "ENIhMZdlSsMGOw7qMkE8VHcSS9RdEC1-aBom-R9cX42x",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Carrier License",
   "description": "License authorizing an entity to bear insurance risk in a jurisdiction. Issued by a state Department of Insurance to a regulated insurance carrier following review and adjudication of a carrier_license_application.",
@@ -118,6 +118,56 @@
           ]
         }
       ]
+    },
+    "e": {
+      "oneOf": [
+        {
+          "description": "Edge block SAID, compact form.",
+          "type": "string"
+        },
+        {
+          "$id": "EC3cGWy20BUPxr-owG3LTzE09XM4qD1tJUL9Yy9cTgmF",
+          "description": "Edges chaining this license to the application it adjudicates.",
+          "type": "object",
+          "properties": {
+            "d": {
+              "description": "Edge block SAID.",
+              "type": "string"
+            },
+            "application": {
+              "description": "NI2I reference to the immutable carrier_license_application ACDC adjudicated by this grant. No authority transfer \u2014 the regulator's authority is statutory/KEL-anchored; this edge is a signed snapshot pointer.",
+              "type": "object",
+              "properties": {
+                "n": {
+                  "description": "SAID of the carrier_license_application node.",
+                  "type": "string"
+                },
+                "s": {
+                  "description": "Schema SAID of carrier_license_application.",
+                  "type": "string",
+                  "const": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb"
+                },
+                "o": {
+                  "description": "Edge operator: NI2I (not-issuer-to-issuee).",
+                  "type": "string",
+                  "const": "NI2I"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "n",
+                "s",
+                "o"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "d",
+            "application"
+          ]
+        }
+      ]
     }
   },
   "additionalProperties": false,
@@ -127,6 +177,7 @@
     "i",
     "ri",
     "s",
-    "a"
+    "a",
+    "e"
   ]
 }

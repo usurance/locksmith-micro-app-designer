@@ -447,7 +447,7 @@
             "exported_credential_id": "carrier_license",
             "imported_credential_id": null,
             "kind": "credential",
-            "schema_said_referenced": "ELK09oTcRiiv-Zmxl-rjKo6EVyOLV-5o4SK96g1kSUie",
+            "schema_said_referenced": "ENIhMZdlSsMGOw7qMkE8VHcSS9RdEC1-aBom-R9cX42x",
             "verb": "grant"
           },
           "kind": "exchange"
@@ -546,10 +546,10 @@
       "emissions": [
         {
           "exchange": {
-            "exported_credential_id": "carrier_license",
-            "imported_credential_id": null,
+            "exported_credential_id": null,
+            "imported_credential_id": "carrier_license_application",
             "kind": "credential",
-            "schema_said_referenced": "ELK09oTcRiiv-Zmxl-rjKo6EVyOLV-5o4SK96g1kSUie",
+            "schema_said_referenced": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb",
             "verb": "spurn"
           },
           "kind": "exchange"
@@ -754,7 +754,14 @@
         "description": "Authorization for a carrier to bear insurance risk on the listed lines of business in this jurisdiction. Issued by the state DOI to a regulated insurance carrier; verifiable by any party that needs to confirm the carrier is in good standing.",
         "envelope": {
           "disclosure_mode": "full",
-          "edges": [],
+          "edges": [
+            {
+              "cardinality": "one",
+              "credential_id": "carrier_license_application",
+              "edge_name": "application",
+              "operator": "references"
+            }
+          ],
           "holder_role": "carrier",
           "verifier_roles": [
             "carrier",
@@ -827,22 +834,32 @@
         ],
         "schema": {
           "schema_path": "schemas/carrier_license.json",
-          "schema_said": "ELK09oTcRiiv-Zmxl-rjKo6EVyOLV-5o4SK96g1kSUie"
+          "schema_said": "ENIhMZdlSsMGOw7qMkE8VHcSS9RdEC1-aBom-R9cX42x"
         },
         "value_flow": {
           "implied_credentials": []
         }
       }
     ],
-    "imports": []
+    "imports": [
+      {
+        "expected_issuer_role": "carrier",
+        "expected_schema_said": "ENbhxLlFINUDp1EU4mV5RVVL-CS6Ub72zXY89EcM7Ccb",
+        "id": "carrier_license_application",
+        "lifecycle_acceptance": [
+          "issued"
+        ],
+        "narrative": "The self-issued application ACDC a carrier presents via IPEX grant. Received, validated, and adjudicated; the granted carrier_license edges back to its SAID."
+      }
+    ]
   },
-  "d": "ECB3SXCX1GGtaaiqIXdgrAclwcCRJcoazStoJn2yzo_y",
+  "d": "EPL4VQTpubtKlu1Qm52yvbH6gZWYENOO4W4sixltahB5",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",
     "expression_language": "CEL/1.0",
     "id": "regulator-grants-carrier-license",
-    "version": "1.0"
+    "version": "1.1"
   },
   "projections": [
     {
@@ -1199,13 +1216,13 @@
       "authz": {
         "method": "open"
       },
-      "description": "When a carrier submits a carrier_license_application via IPEX apply, record the application in the license registry as pending and surface it to the regulator's review queue. The regulator will then either grant_license or spurn_application.",
+      "description": "When a carrier presents a carrier_license_application ACDC via IPEX grant, record the application in the license registry as pending and surface it to the regulator's review queue. The regulator will then either grant_license or spurn_application.",
       "emissions": [
         {
           "aggregate_id": "license_registry",
           "event_type": "application_received",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"application_id\": event.payload.application_id, \"applicant_aid\": event.source_aid, \"jurisdiction\": event.payload.jurisdiction, \"lines_of_business\": event.payload.lines_of_business, \"received_at\": event.datetime }"
+          "payload_mapping": "{ \"application_id\": event.credential.said, \"applicant_aid\": event.credential.issuer, \"jurisdiction\": event.credential.attributes.jurisdiction, \"lines_of_business\": event.credential.attributes.lines_of_business, \"received_at\": event.datetime }"
         }
       ],
       "failure_policy": {
@@ -1214,8 +1231,9 @@
       },
       "id": "on_application_received",
       "trigger": {
-        "route": "/insurance/cmd/submit_application",
-        "type": "exn_received"
+        "imported_credential_id": "carrier_license_application",
+        "ipex_verb": "grant",
+        "type": "credential_received"
       }
     },
     {
@@ -1360,7 +1378,7 @@
   "workflows": [
     {
       "counterparty_role": "carrier",
-      "description": "Regulator's view of the licensing conversation. Triggered when a carrier sends an /insurance/cmd/submit_application exn. Records the application as pending, branches on the regulator's internal review decision, and emits either a grant (issuing the carrier_license credential) or a spurn (denial with reason).",
+      "description": "Regulator's view of the licensing conversation. Triggered when a carrier presents a carrier_license_application ACDC via IPEX grant. Records the application as pending, branches on the regulator's internal review decision, and emits either a grant (issuing the carrier_license credential) or a spurn (denial with reason).",
       "id": "license_grant_workflow",
       "name": "License Grant Workflow",
       "steps": [
@@ -1431,8 +1449,9 @@
         }
       ],
       "trigger": {
-        "route": "/insurance/cmd/submit_application",
-        "type": "exn_received"
+        "imported_credential_id": "carrier_license_application",
+        "ipex_verb": "grant",
+        "type": "credential_received"
       }
     },
     {
