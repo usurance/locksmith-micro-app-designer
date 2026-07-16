@@ -172,7 +172,9 @@ scheduled migration, out of scope here.
 
 - keripy import failure raises at `--lint` invocation with a message pointing at the Locksmith
   venv convention (`~/code/locksmith/.venv`); the no-flag path never imports keri via lint.
-- All per-file checks are independent: one broken schema file doesn't mask findings in others.
+- File-level failures get their own codes: `F01` (expected file missing) and `F02` (unparseable
+  JSON), both error severity. All per-file checks are independent: one broken schema file doesn't
+  mask findings in others.
 - Malformed SAID strings in template reference fields are errors (T03/T04 "well-formed" half), not
   external warnings — external status is only granted to values that parse as SAIDs.
 

@@ -232,3 +232,195 @@ def test_lint_result_severity_partitions():
     ])
     assert len(r.errors) == 1 and len(r.warnings) == 1
     assert r.is_compliant is False
+
+
+# ---------------------------------------------------------------------------
+# Dir-level checks (T01-T07, F01/F02) and golden worked-example expectations
+# ---------------------------------------------------------------------------
+
+from pathlib import Path
+
+import pytest
+
+from locksmith_micro_app_designer.template.lint import lint_template_dir
+from locksmith_micro_app_designer.template.saidify import saidify_document
+
+from .conftest import write_template_dir
+
+REPO_ROOT = Path(__file__).parent.parent.parent
+EXAMPLES = REPO_ROOT / "skills/micro-app-template-gen/references/examples"
+
+
+def _read_dir(root: Path) -> tuple[dict, dict, dict]:
+    template = json.loads((root / "micro-app-template.json").read_text())
+    metadata = json.loads((root / "metadata.json").read_text())
+    schemas = {
+        p.name: json.loads(p.read_text())
+        for p in sorted((root / "schemas").glob("*.json"))
+    }
+    return template, metadata, schemas
+
+
+def test_compliant_dir_zero_findings(compliant_template_dir):
+    result = lint_template_dir(compliant_template_dir)
+    assert result.findings == []
+    assert result.is_compliant is True
+
+
+def test_t01_template_said_tamper(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    template["header"]["description"] = "tampered"
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    assert "T01" in _codes(r.errors)
+
+
+def test_t02_missing_schema_file(compliant_template_dir):
+    (compliant_template_dir / "schemas/test_credential.json").unlink()
+    r = lint_template_dir(compliant_template_dir)
+    assert "T02" in _codes(r.errors)
+
+
+def test_t02_schema_said_mismatch(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    template["credentials"]["exports"][0]["schema"]["schema_said"] = (
+        VALID_EXTERNAL_SAID
+    )
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    assert "T02" in _codes(r.errors)
+
+
+def test_t03_malformed_import_said_is_error(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    template["credentials"]["imports"] = [
+        {"id": "other_credential", "expected_schema_said": "not-a-said"}
+    ]
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    assert any(f.code == "T03" and f.severity == "error" for f in r.findings)
+
+
+def test_t03_unresolved_import_said_is_external_warning(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    template["credentials"]["imports"] = [
+        {"id": "other_credential", "expected_schema_said": VALID_EXTERNAL_SAID}
+    ]
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    assert any(f.code == "T03" and f.severity == "warning" for f in r.findings)
+    assert r.is_compliant is True
+
+
+def test_t04_emission_and_authz_saids(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    template["commands"] = [{
+        "id": "do_thing",
+        "emissions": [{
+            "kind": "credential",
+            "verb": "grant",
+            "schema_said_referenced": VALID_EXTERNAL_SAID,
+        }],
+        "authz": {"method": "credential", "schema_said": "not-a-said"},
+    }]
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    t04 = [f for f in r.findings if f.code == "T04"]
+    assert any(f.severity == "warning" for f in t04)  # external emission SAID
+    assert any(f.severity == "error" for f in t04)    # malformed authz SAID
+
+
+def test_t05_metadata_said_mismatch(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    metadata["for_micro_app_said"] = VALID_EXTERNAL_SAID
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    assert "T05" in _codes(r.errors)
+
+
+def test_t06_unresolved_edge_pin_warns(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    schema = make_schema_with_edges(VALID_EXTERNAL_SAID)
+    template["credentials"]["exports"][0]["schema"]["schema_said"] = schema["$id"]
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(
+        compliant_template_dir, template, metadata,
+        {"test_credential.json": schema},
+    )
+    r = lint_template_dir(compliant_template_dir)
+    assert any(f.code == "T06" and f.severity == "warning" for f in r.findings)
+
+
+def test_t06_edge_pin_resolved_by_template_reference(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    schema = make_schema_with_edges(VALID_EXTERNAL_SAID)
+    template["credentials"]["exports"][0]["schema"]["schema_said"] = schema["$id"]
+    template["credentials"]["imports"] = [
+        {"id": "other_credential", "expected_schema_said": VALID_EXTERNAL_SAID}
+    ]
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(
+        compliant_template_dir, template, metadata,
+        {"test_credential.json": schema},
+    )
+    r = lint_template_dir(compliant_template_dir)
+    assert "T06" not in _codes(r.findings)
+
+
+def test_t07_orphan_schema_warns(compliant_template_dir):
+    orphan = make_compliant_schema()
+    orphan["title"] = "Orphan Credential"  # distinct content -> distinct $id
+    orphan = saidify_schema_block(orphan)
+    (compliant_template_dir / "schemas/orphan.json").write_text(
+        json.dumps(orphan, indent=2) + "\n"
+    )
+    r = lint_template_dir(compliant_template_dir)
+    assert any(f.code == "T07" and f.severity == "warning" for f in r.findings)
+
+
+def test_f01_missing_metadata(compliant_template_dir):
+    (compliant_template_dir / "metadata.json").unlink()
+    r = lint_template_dir(compliant_template_dir)
+    assert any(f.code == "F01" and f.file == "metadata.json" for f in r.errors)
+
+
+def test_f01_missing_template(tmp_path):
+    (tmp_path / "schemas").mkdir()
+    r = lint_template_dir(tmp_path)
+    assert any(
+        f.code == "F01" and f.file == "micro-app-template.json"
+        for f in r.errors
+    )
+
+
+def test_f02_unparseable_schema(compliant_template_dir):
+    (compliant_template_dir / "schemas/broken.json").write_text("not json")
+    r = lint_template_dir(compliant_template_dir)
+    assert any(f.code == "F02" and f.file == "schemas/broken.json" for f in r.errors)
+
+
+@pytest.mark.parametrize("name", [
+    "regulator-grants-carrier-license",
+    "carrier-license-application",
+])
+def test_worked_examples_pin_known_findings(name):
+    """The bundled examples MUST fail S05 (missing schema version) and
+    nothing else at error severity. Fixing them re-SAIDs the schemas and
+    cascades into locksmith CarrierPlugin trust constants -- an owner-
+    scheduled migration. If this test starts failing because S05 stops
+    firing, the migration happened: update this test, not the linter."""
+    result = lint_template_dir(EXAMPLES / name)
+    assert _codes(result.errors) == {"S05"}
+    schema_count = len(list((EXAMPLES / name / "schemas").glob("*.json")))
+    assert len(result.errors) == schema_count
+    assert _codes(result.warnings) <= {"T03", "T04", "T06", "T07"}

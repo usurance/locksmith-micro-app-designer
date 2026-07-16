@@ -294,3 +294,161 @@ def collect_edge_schema_pins(doc: dict[str, Any]) -> list[tuple[str, str]]:
             if isinstance(s_const, str) and is_bare_said(s_const):
                 pins.append((f"{path}.properties.s.const", s_const))
     return pins
+
+
+TEMPLATE_FILE = "micro-app-template.json"
+METADATA_FILE = "metadata.json"
+
+# Template keys whose string values are schema-SAID references (T03/T04).
+_SAID_REF_KEYS = ("expected_schema_said", "schema_said_referenced", "schema_said")
+
+
+def _load_json(path: Path, rel: str, findings: list[LintFinding]) -> Any | None:
+    """Load a JSON file; on absence/parse failure record F01/F02 and return None."""
+    if not path.exists():
+        findings.append(LintFinding(rel, "", "F01", f"{rel} not found"))
+        return None
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        findings.append(LintFinding(rel, "", "F02", f"unparseable JSON: {e}"))
+        return None
+
+
+def _iter_template_said_refs(
+    template: dict[str, Any],
+) -> Iterator[tuple[str, str, Any]]:
+    """Yield (path, key, value) for every schema-SAID reference field in the
+    template. `schema_said` paired with a sibling `schema_path` is the export
+    pin handled by T02 and is skipped here."""
+    for path, node in _walk(template):
+        for key in _SAID_REF_KEYS:
+            if key not in node:
+                continue
+            if key == "schema_said" and "schema_path" in node:
+                continue  # exports[].schema -- T02's job
+            value = node[key]
+            if value is None:
+                continue
+            yield (f"{path}.{key}" if path != "<root>" else key, key, value)
+
+
+def lint_template_dir(template_dir: Path) -> LintResult:
+    """Lint one micro-app template directory. Never raises on bad artifacts:
+    missing/unparseable files become F01/F02 findings and remaining checks
+    still run where their inputs exist."""
+    findings: list[LintFinding] = []
+    template_dir = Path(template_dir)
+
+    template = _load_json(template_dir / TEMPLATE_FILE, TEMPLATE_FILE, findings)
+    metadata = _load_json(template_dir / METADATA_FILE, METADATA_FILE, findings)
+
+    # Schema files: S01-S09 each, plus collect $ids and edge pins.
+    schema_docs: dict[str, dict[str, Any]] = {}
+    schemas_dir = template_dir / "schemas"
+    if schemas_dir.is_dir():
+        for path in sorted(schemas_dir.glob("*.json")):
+            rel = f"schemas/{path.name}"
+            doc = _load_json(path, rel, findings)
+            if doc is not None:
+                schema_docs[rel] = doc
+                findings.extend(lint_schema_doc(doc, rel))
+
+    local_saids = {
+        doc[SAID_LABEL]: rel for rel, doc in schema_docs.items()
+        if isinstance(doc.get(SAID_LABEL), str) and doc[SAID_LABEL]
+    }
+
+    referenced_paths: set[str] = set()
+    referenced_saids: set[str] = set()
+
+    if template is not None:
+        # T01 -- template's own SAID
+        if not verify_said(template):
+            findings.append(LintFinding(
+                TEMPLATE_FILE, "d", "T01",
+                "template d SAID does not verify against the canonical "
+                "(sorted-keys) form",
+            ))
+
+        # T02 -- export schema pins
+        exports = (template.get("credentials") or {}).get("exports") or []
+        for i, export in enumerate(exports):
+            schema_ref = export.get("schema")
+            if not isinstance(schema_ref, dict):
+                continue
+            base = f"credentials.exports[{i}].schema"
+            schema_path = schema_ref.get("schema_path")
+            schema_said = schema_ref.get("schema_said")
+            if schema_path:
+                referenced_paths.add(schema_path)
+                if schema_path not in schema_docs:
+                    findings.append(LintFinding(
+                        TEMPLATE_FILE, f"{base}.schema_path", "T02",
+                        f"schema_path {schema_path!r} not found in template "
+                        "directory",
+                    ))
+                elif schema_docs[schema_path].get(SAID_LABEL) != schema_said:
+                    findings.append(LintFinding(
+                        TEMPLATE_FILE, f"{base}.schema_said", "T02",
+                        f"schema_said {schema_said!r} does not match "
+                        f"{schema_path}'s $id "
+                        f"{schema_docs[schema_path].get(SAID_LABEL)!r}",
+                    ))
+            if isinstance(schema_said, str):
+                referenced_saids.add(schema_said)
+
+        # T03/T04 -- every other schema-SAID reference in the template
+        for path, key, value in _iter_template_said_refs(template):
+            code = "T03" if key == "expected_schema_said" else "T04"
+            if not is_bare_said(value):
+                findings.append(LintFinding(
+                    TEMPLATE_FILE, path, code,
+                    f"{key} {value!r} is not a well-formed bare SAID",
+                ))
+                continue
+            referenced_saids.add(value)
+            if value not in local_saids:
+                findings.append(LintFinding(
+                    TEMPLATE_FILE, path, code,
+                    f"{key} {value!r} does not match any local schemas/*.json "
+                    "$id -- assumed external; verify against the ecosystem "
+                    "schema registry (future EGF resolver)",
+                    severity="warning",
+                ))
+
+        # T05 -- metadata binds to this template
+        if metadata is not None:
+            if metadata.get("for_micro_app_said") != template.get("d"):
+                findings.append(LintFinding(
+                    METADATA_FILE, "for_micro_app_said", "T05",
+                    f"for_micro_app_said "
+                    f"{metadata.get('for_micro_app_said')!r} does not match "
+                    f"the template's d {template.get('d')!r}",
+                ))
+
+    # T06 -- edge `s` const pins resolve against known SAIDs
+    known_saids = set(local_saids) | referenced_saids
+    for rel, doc in schema_docs.items():
+        for path, said in collect_edge_schema_pins(doc):
+            if said not in known_saids:
+                findings.append(LintFinding(
+                    rel, path, "T06",
+                    f"edge schema pin {said!r} does not resolve to a local "
+                    "schema $id or any template-referenced SAID -- assumed "
+                    "external",
+                    severity="warning",
+                ))
+
+    # T07 -- orphan schema files
+    for rel, doc in schema_docs.items():
+        said = doc.get(SAID_LABEL)
+        if rel not in referenced_paths and said not in referenced_saids:
+            findings.append(LintFinding(
+                rel, "", "T07",
+                "schema file is not referenced by any export schema_path, "
+                "import/emission SAID, or edge pin",
+                severity="warning",
+            ))
+
+    return LintResult(findings=findings)
