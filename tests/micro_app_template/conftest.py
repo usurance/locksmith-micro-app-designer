@@ -1,9 +1,15 @@
 """Shared fixtures for micro-app-template tests."""
 from __future__ import annotations
 
+import copy
+import json
 from pathlib import Path
 
 import pytest
+
+from locksmith_micro_app_designer.template.canonical_json import canonicalize
+from locksmith_micro_app_designer.template.saidify import saidify_document
+from locksmith_micro_app_designer.template.schema_said import saidify_schema_block
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -50,3 +56,86 @@ def minimal_valid_template() -> dict:
         "projections": [],
         "rules": [],
     }
+
+
+def make_compliant_schema() -> dict:
+    """A minimal fully-lint-compliant ACDC schema (envelope + attribute block)."""
+    schema = {
+        "$id": "",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Test Credential",
+        "description": "Minimal compliant ACDC schema for lint tests.",
+        "type": "object",
+        "credentialType": "TestCredential",
+        "version": "1.0.0",
+        "properties": {
+            "v": {"description": "ACDC version string.", "type": "string"},
+            "d": {"description": "Credential SAID.", "type": "string"},
+            "i": {"description": "Issuer AID.", "type": "string"},
+            "ri": {"description": "Registry identifier.", "type": "string"},
+            "s": {"description": "Schema SAID.", "type": "string"},
+            "a": {
+                "oneOf": [
+                    {"description": "Attributes block SAID, compact form.", "type": "string"},
+                    {
+                        "$id": "",
+                        "description": "Attributes block.",
+                        "type": "object",
+                        "properties": {
+                            "d": {"description": "Attributes block SAID.", "type": "string"},
+                            "i": {"description": "Issuee AID.", "type": "string"},
+                            "dt": {
+                                "description": "Issuance date-time.",
+                                "type": "string",
+                                "format": "date-time",
+                            },
+                            "claim": {"description": "A test claim.", "type": "string"},
+                        },
+                        "additionalProperties": False,
+                        "required": ["d", "i", "dt", "claim"],
+                    },
+                ]
+            },
+        },
+        "additionalProperties": False,
+        "required": ["v", "d", "i", "ri", "s", "a"],
+    }
+    schema["properties"]["a"]["oneOf"][1] = saidify_schema_block(
+        schema["properties"]["a"]["oneOf"][1]
+    )
+    return saidify_schema_block(schema)
+
+
+def write_template_dir(root, template: dict, metadata: dict, schemas: dict) -> None:
+    """Write a template dir. `schemas` maps filename -> doc. Schemas are
+    written in insertion order (json.dumps, NOT canonicalize) because their
+    SAIDs bind to key order; template/metadata use the canonical form."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "micro-app-template.json").write_text(canonicalize(template))
+    (root / "metadata.json").write_text(canonicalize(metadata))
+    schemas_dir = root / "schemas"
+    schemas_dir.mkdir(exist_ok=True)
+    for name, doc in schemas.items():
+        (schemas_dir / name).write_text(json.dumps(doc, indent=2) + "\n")
+
+
+@pytest.fixture
+def compliant_template_dir(tmp_path, minimal_valid_template):
+    """A fully lint-compliant template dir; lint must return zero findings."""
+    schema = make_compliant_schema()
+    template = copy.deepcopy(minimal_valid_template)
+    template["credentials"]["exports"] = [
+        {
+            "id": "test_credential",
+            "name": "Test Credential",
+            "schema": {
+                "schema_path": "schemas/test_credential.json",
+                "schema_said": schema["$id"],
+            },
+        }
+    ]
+    template = saidify_document(template)
+    metadata = {"for_micro_app_said": template["d"]}
+    root = tmp_path / "tester-minimal"
+    write_template_dir(root, template, metadata, {"test_credential.json": schema})
+    return root
