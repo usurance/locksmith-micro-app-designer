@@ -18,6 +18,11 @@ def main() -> int:
     p = argparse.ArgumentParser(description="Validate a micro-app template.")
     p.add_argument("--input", required=True, type=Path, help="Path to micro-app-template.json")
     p.add_argument("--schema", type=Path, default=DEFAULT_SCHEMA, help="Path to meta-schema (default: project meta-schema)")
+    p.add_argument(
+        "--lint", action="store_true",
+        help="Also run the SAD/SAID + ACDC-schema compliance lint over the "
+             "template directory (requires keripy from the Locksmith venv)",
+    )
     args = p.parse_args()
 
     if not args.input.exists():
@@ -32,12 +37,39 @@ def main() -> int:
 
     if result.is_valid:
         print(f"OK: {args.input} validates against {args.schema.name}")
-        return 0
+    else:
+        print(f"FAIL: {args.input}", file=sys.stderr)
+        for e in result.errors:
+            print(f"  {e.path}: {e.message}", file=sys.stderr)
 
-    print(f"FAIL: {args.input}", file=sys.stderr)
-    for e in result.errors:
-        print(f"  {e.path}: {e.message}", file=sys.stderr)
-    return 1
+    ok = result.is_valid
+
+    if args.lint:
+        try:
+            from locksmith_micro_app_designer.template.lint import lint_template_dir
+        except ImportError as e:
+            print(
+                "error: --lint requires keripy (install into / run from the "
+                f"Locksmith venv, e.g. ~/code/locksmith/.venv): {e}",
+                file=sys.stderr,
+            )
+            return 2
+
+        lint_result = lint_template_dir(args.input.parent)
+        for f in lint_result.findings:
+            loc = f"{f.file}:{f.path}" if f.path else f.file
+            line = f"  {f.severity.upper()} {f.code} {loc}: {f.message}"
+            print(line, file=sys.stderr if f.severity == "error" else sys.stdout)
+        if lint_result.is_compliant:
+            print(
+                f"LINT OK: {args.input.parent} "
+                f"({len(lint_result.warnings)} warning(s))"
+            )
+        else:
+            print(f"LINT FAIL: {args.input.parent}", file=sys.stderr)
+            ok = False
+
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

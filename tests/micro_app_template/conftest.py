@@ -128,9 +128,21 @@ def compliant_template_dir(tmp_path, minimal_valid_template):
         {
             "id": "test_credential",
             "name": "Test Credential",
+            "description": "Minimal exported credential for lint tests.",
+            "envelope": {
+                "holder_role": "tester",
+                "verifier_roles": ["tester"],
+                "edges": [],
+                "disclosure_mode": "full",
+            },
             "schema": {
                 "schema_path": "schemas/test_credential.json",
                 "schema_said": schema["$id"],
+            },
+            "lifecycle": {
+                "states": ["issued"],
+                "initial": "issued",
+                "transitions": [],
             },
         }
     ]

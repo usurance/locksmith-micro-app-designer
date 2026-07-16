@@ -71,3 +71,34 @@ def test_validate_fails_on_invalid(tmp_path, minimal_valid_template):
     result = _run(VALIDATE, "--input", str(src))
     assert result.returncode != 0
     assert "role" in (result.stdout + result.stderr).lower()
+
+
+EXAMPLES = REPO_ROOT / "skills/micro-app-template-gen/references/examples"
+
+
+def test_validate_lint_compliant_dir_exits_zero(compliant_template_dir):
+    result = _run(
+        VALIDATE,
+        "--input", str(compliant_template_dir / "micro-app-template.json"),
+        "--lint",
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "LINT OK" in result.stdout
+
+
+def test_validate_lint_flags_missing_version_on_worked_example():
+    template = (
+        EXAMPLES / "regulator-grants-carrier-license/micro-app-template.json"
+    )
+    result = _run(VALIDATE, "--input", str(template), "--lint")
+    assert result.returncode == 1
+    assert "S05" in result.stderr
+
+
+def test_validate_without_lint_unchanged_on_worked_example():
+    template = (
+        EXAMPLES / "regulator-grants-carrier-license/micro-app-template.json"
+    )
+    result = _run(VALIDATE, "--input", str(template))
+    assert result.returncode == 0
+    assert "S05" not in result.stdout + result.stderr
