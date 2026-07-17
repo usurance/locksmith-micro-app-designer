@@ -70,6 +70,7 @@ Plus:
 | `references/naming-conventions.md` | Recommended naming for credentials, roles, workflows, routes |
 | `references/skeleton.json` | Copyable starting template (minimal-valid with REPLACE-ME fields) |
 | `references/examples/` | Worked examples (one per ecosystem domain, when available) |
+| the `acdc-design` skill | Credential-type design decisions consumed at Step 3 (targeted/untargeted, `u`/blinding, disclosure, edges, registry, versioning, governance) |
 
 ## Discipline (rigid)
 

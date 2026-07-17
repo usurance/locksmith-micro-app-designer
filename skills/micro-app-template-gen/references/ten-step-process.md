@@ -91,6 +91,11 @@ Let the SME override defaults. The flags are deployment-readiness *expectations*
 
 **Goal:** Define the credentials this role produces — their envelope, schema, lifecycle, rules, value flow.
 
+> **Design decisions first.** Before authoring the schema, settle the design
+> decisions for this credential (targeted/untargeted, public/private `u`, disclosure
+> mode, edges, registry, versioning, governance) using the **`acdc-design`** skill.
+> This step then serializes those decisions into the envelope below.
+
 **The most substantial step.** Each exported credential has six layers (per spec §6.3).
 
 For each exported credential, walk:
@@ -130,6 +135,7 @@ The state machine layered on top can have any names; transitions map each to one
   "properties": {
     "v": {"type": "string"},
     "d": {"type": "string"},
+    "u": {"type": "string"},
     "i": {"type": "string"},
     "ri": {"type": "string"},
     "s": {"type": "string"},
@@ -156,6 +162,11 @@ The state machine layered on top can have any names; transitions map each to one
   "required": ["v", "d", "i", "ri", "s", "a"]
 }
 ```
+
+`u` (top-level UUID) is **optional** and controls the public/private variant: omit it
+for a public attestation; include a high-entropy value for a private (blindable)
+credential. See the `acdc-design` skill (`shape-and-disclosure.md`). `u` is not added
+to `required`.
 
 The SME's attributes live in the **second `a.oneOf` branch**, alongside the mandatory `d`/`i`/`dt`. (`e` and `r` sections follow the same `oneOf` pattern when the credential has edges or Ricardian rules.)
 
