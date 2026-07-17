@@ -1,0 +1,23 @@
+{
+  "skill_name": "acdc-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Design the carrier-license credential type for our insurance ecosystem.",
+      "expected_output": "Surfaces targeted, u-field, disclosure, edge, registry, versioning, governance decisions with spec-grounded defaults",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I need to issue carrier licenses now, but the state DOI isn't on KERI yet. How do I model the credential?",
+      "expected_output": "Bootstrapping pattern: open v1, placeholder authority, transition plan, re-issue later",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Should I add a reference edge to hang the accreditation document off my transcript credential?",
+      "expected_output": "Restates edges-are-authz-only; routes data to import+aggregate fold, not an edge",
+      "files": []
+    }
+  ]
+}

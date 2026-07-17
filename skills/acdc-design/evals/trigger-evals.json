@@ -1,0 +1,22 @@
+[
+  {"query": "Design the carrier-license credential type for our insurance ecosystem.", "should_trigger": true},
+  {"query": "I need to model a new attestation for proof of homeowner's insurance coverage — how should I structure it?", "should_trigger": true},
+  {"query": "What edge type should I use to link an agent-appointment credential back to the carrier license?", "should_trigger": true},
+  {"query": "We're standing up a claims-adjuster role credential — walk me through the schema design.", "should_trigger": true},
+  {"query": "Should this employment-verification credential be publicly disclosable or should I blind it with a u field?", "should_trigger": true},
+  {"query": "How do I decide between full and selective disclosure for our underwriting-attributes schema?", "should_trigger": true},
+  {"query": "Micro-app-template-gen Step 3 wants credential export decisions for the reinsurance-treaty type — help me work through those.", "should_trigger": true},
+  {"query": "I'm building a new verifiable credential for vehicle-title transfer — what should the JSON-Schema look like structurally?", "should_trigger": true},
+  {"query": "Need help figuring out whether our claims-adjuster credential should be issued by a fixed carrier AID or governed externally.", "should_trigger": true},
+  {"query": "What's the right registry/TEL pattern for a policy-endorsement credential type we're about to define?", "should_trigger": true},
+  {"query": "How do I stand up a witness pool for our KERI ecosystem?", "should_trigger": false},
+  {"query": "Walk me through rotating the keys on our carrier's top-level AID.", "should_trigger": false},
+  {"query": "The carrier-license schema design is done — SAIDify it with scripts/saidify_acdc_schema.py.", "should_trigger": false},
+  {"query": "Run the compliance linter against schemas/carrier-license.json before we ship it.", "should_trigger": false},
+  {"query": "Write the CEL rule that checks the applicant's age is over 18 for this rating rule.", "should_trigger": false},
+  {"query": "What does KAWA witness receipting actually guarantee?", "should_trigger": false},
+  {"query": "Our agent's OOBI resolution keeps failing — any idea why?", "should_trigger": false},
+  {"query": "Serialize the already-approved agent-appointment schema into its final compact-form JSON envelope.", "should_trigger": false},
+  {"query": "Explain how pre-rotation protects an AID against key compromise.", "should_trigger": false},
+  {"query": "Lint the homeowner underwriting-attributes schema for SAID/schema drift before merge.", "should_trigger": false}
+]
