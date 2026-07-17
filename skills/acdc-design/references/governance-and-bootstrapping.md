@@ -105,7 +105,6 @@ credential type itself must ship now?
 verbatim from the design brief because the sequencing and the corrected
 spec fact both matter and neither should be paraphrased loosely.
 
-```markdown
 ## Authority bootstrapping ("open now, closed later")
 
 ugard's literal situation: state DOIs are not on KERI yet, but credential types must
@@ -124,7 +123,6 @@ rotation* (pre-rotation is the mechanism), so a baked-in authority AID does **no
 break when the authority rotates keys. The real reason to prefer open-then-closed is
 authority **replacement** (successor org, unrecoverable compromise) and the rigidity
 of constraining issuers before the ecosystem exists.
-```
 
 *(Practice-level: this whole bootstrap sequence — placeholder issuer,
 governance-framework transition plan, dual-acceptance window, major-version
