@@ -105,8 +105,6 @@ credential type itself must ship now?
 verbatim from the design brief because the sequencing and the corrected
 spec fact both matter and neither should be paraphrased loosely.
 
-## Authority bootstrapping ("open now, closed later")
-
 ugard's literal situation: state DOIs are not on KERI yet, but credential types must
 ship now. Pattern:
 1. v1 schema leaves the issuer field **unconstrained** (open).
