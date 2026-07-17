@@ -21,13 +21,20 @@ type?
 standard" when an Ecosystem Governance Framework (EGF) pins its SAID in a
 well-known accepted-set, and multiple ecosystems voting-by-usage to converge
 on the same SAID is how a de facto standard forms across ecosystems, while
-one EGF governs acceptance within its own. The authoring-side action is
+one EGF governs acceptance within its own.
+
+*(Practice-level: "adoption is emergent" / "vote-by-usage" is an
+interpretive framing of how convergence tends to happen, not a spec
+requirement — the spec-grounded part is narrower: EGF registries are
+permission-less and ecosystem-tailored, per the Mechanics citation below.)*
+
+The authoring-side action is
 narrow: publish the SAID and record it where the EGF's accepted-set will
 reference it. Building or operating the publication/discovery mechanism
 itself is **out of scope** for credential-type design — that's ugard's
 `egf-publisher-registry` backlog item, a separate service.
 
-**Worked example (insurance):** A carrier-license schema, once designed and
+**Worked example:** A carrier-license schema, once designed and
 SAID-derived, is published so that any state DOI's EGF (once DOIs are
 KERI-native) or an interim ecosystem EGF can pin that SAID in its
 accepted-issuer-types list. If two different regional ecosystems both
@@ -70,7 +77,7 @@ machine-checkable, immutable enforcement **versus** rigidity — adding an
 authorized issuer means a new schema SAID, i.e. a new type — and lock-in to
 whatever authority set existed at design time.
 
-**Worked example (insurance):** A carrier's internal role credential (e.g.,
+**Worked example:** A carrier's internal role credential (e.g.,
 "licensed claims adjuster employed by Carrier X") is closed, stable, and
 single-authority — Carrier X is the only issuer that will ever exist for
 this exact type, so baking `enum: [carrier_X_AID]` onto the issuer field is
@@ -125,7 +132,7 @@ close — is an ecosystem practice pattern for ugard's specific situation, not
 a spec requirement. The spec only requires that the Issuer AID's authority be
 KERI-verifiable Key State; it says nothing about phased rollout.)*
 
-**Worked example (insurance):** The carrier-license design is the concrete
+**Worked example:** The carrier-license design is the concrete
 instance of this pattern: v1 ships with the issuer field open, a carrier
 self-issues its own license as an internal placeholder authority, and a
 governance-framework SAD records that the target authority is the relevant

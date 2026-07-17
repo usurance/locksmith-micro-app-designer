@@ -7,10 +7,12 @@ this brief records (a) the hard spec constraint(s) with a verifiable citation an
 normative ACDC spec, (b) the settled-canon reference where `ugard/docs/canon/` already decided the
 question, and (c) any practice-level note, explicitly flagged as practice rather than spec-normative.
 
-**Ground truth:** `/Users/seriouscoderone/KERI/specs/acdc-specification.md` (normative, 8,891
-lines; hereafter "the spec"). Line numbers are from that file as read on 2026-07-16 and may drift
-if the spec file changes — the quoted anchor phrase is the durable reference; re-run the Step 3
-check below if a citation ever looks stale.
+**Ground truth:** the normative ACDC specification (~8,891 lines; hereafter "the spec") — accessed
+via the `keri:acdc` / `keri:spec` skills, the canonical source being the IETF/ToIP ACDC
+specification (local copy at `~/KERI/specs/acdc-specification.md` on the author's machine, if
+available). Line numbers below are from that file as read on 2026-07-16 and may drift if the spec
+file changes — the quoted anchor phrase is the durable reference; re-run the Step 3 check below if
+a citation ever looks stale.
 
 **Source hierarchy (per the skill design, `docs/superpowers/specs/2026-07-16-acdc-design-skill-design.md`):**
 1. Normative spec — ground truth for every protocol claim.

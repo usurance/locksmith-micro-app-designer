@@ -30,7 +30,10 @@ the credential's SAID (e.g., anchor it, reference it in another ACDC) *before* t
 holder is ready to disclose its contents?
 
 **Default:** Public (no `u` field). Most attestations aren't confidential — treat
-commitment to the SAID as a normal, non-leaking correlation point.
+commitment to the SAID as a normal, non-leaking correlation point. Note a third state:
+an empty `u` (`""`) selects the **metadata** variant — a commitment to a not-yet-disclosed
+private ACDC — rather than a binary public/private choice; see the disclosure-mode
+section below and the grounding brief for detail.
 
 **Worked example:** A carrier operating-license credential is **public** — the
 license number and jurisdiction are public record, and a regulator or reinsurer
@@ -74,7 +77,7 @@ shape in `micro-app-template-gen` ten-step-process §Step 3.
 
 ## Choosing shape & disclosure
 
-```
+```markdown
 Is there a specific subject AID? ── yes ─→ targeted   ── no ─→ untargeted
 Must you commit before revealing, or does schema+SAID leak values? ── yes ─→ private (`u`) ── no ─→ public
 Will a holder reveal a subset of attributes independently? ── yes ─→ selective disclosure ── no ─→ full

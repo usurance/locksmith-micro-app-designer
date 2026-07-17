@@ -29,10 +29,11 @@ Work top-to-bottom for a new type; jump to the row you need for a single decisio
 
 ## Grounding discipline (for anyone extending this skill)
 
-Ground truth is `/Users/seriouscoderone/KERI/specs/acdc-specification.md`. `keri:acdc`
-/`keri:spec` are distilled convenience; `keri:chat` answers *practice* questions only.
-Verify any claim against the spec before it becomes guidance; label practice patterns
-as practice. On conflict, the spec wins.
+Ground truth is the normative ACDC specification — accessed via the `keri:acdc` /
+`keri:spec` skills (the canonical source is the IETF/ToIP ACDC specification).
+`keri:acdc`/`keri:spec` are distilled convenience; `keri:chat` answers *practice*
+questions only. Verify any claim against the spec before it becomes guidance; label
+practice patterns as practice. On conflict, the spec wins.
 
 ## Serialization is elsewhere
 
