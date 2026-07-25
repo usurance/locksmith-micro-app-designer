@@ -202,6 +202,8 @@ Aggregates are typically TEL-backed (when tracking credential lifecycle) or KEL-
 4. **Invariants** — forward-ref validation rules
 5. **Log scope** — `private` | `witnessed` | `shared`
 
+**Fold-op gotcha (applies to projection folds too, Step 8):** every fold-op field is a **CEL expression string** — including `increment`'s `by`, which must be written `"by": "1"` / `"by": "-1"`, never a bare JSON number. The meta-schema rejects numeric `by` with an opaque "not valid under any of the given schemas" error on the whole handler.
+
 ## Step 6 — Reactions
 
 **Goal:** Define what this role does when it observes external events.
