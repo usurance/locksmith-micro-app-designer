@@ -237,7 +237,7 @@ Aggregates are typically TEL-backed (when tracking credential lifecycle) or KEL-
 
 ### `instance_key` is a routing selector, not an identifier
 
-**It must name a field every source event supplies** — routing precedes the handler. If
+It must name a field **every source event supplies** (routing precedes the handler). If
 one emission of one event type in this aggregate's `fold` map omits that field, that event
 is not mis-folded, it is **un-appendable**: it never lands at all, silently.
 
@@ -300,7 +300,7 @@ For each:
 
 ### `primary_key` has the identical rule
 
-**It must name a field every source event supplies** (routing precedes the handler). Check
+It must name a field **every source event supplies** (routing precedes the handler). Check
 every entry in `source_events`, not just the obvious one — a projection sourcing four event
 types needs the key in all four emissions, or those rows are never created.
 
