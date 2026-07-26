@@ -190,6 +190,37 @@ Stamp the SAIDs with `python scripts/saidify_acdc_schema.py schemas/{credential_
 - ❌ Using `/ipex/*` for app-defined commands — reserved for protocol
 - ❌ Expressing authorization as a CEL predicate in `auth_preconditions` — use the `authz` field instead
 
+### The just-issued credential's SAID
+
+A `payload_mapping` sees `{command, state}` — and **neither can name the credential this
+command is issuing**. Its SAID does not exist until the issuance runs. Use the binding
+the authoring spec pins for exactly this (§6.4):
+
+```json
+"payload_mapping": "{ \"version_said\": credential.said, \"product_id\": command.product_id }"
+```
+
+- `credential.said` is available only **at or after** the `kind: credential` exchange
+  emission that issues the export, in the same `emissions[]` list. Put the issuing
+  exchange first.
+- It is the **only** thing you need this binding for. Every attribute value is already in
+  `command.*`, because your command supplied them — the SAID is the one value issuance
+  *creates* rather than *consumes*.
+- Do **not** confuse it with `event.credential` (Step 6, reactions): that is the
+  **inbound** credential that triggered a reaction. Bare `credential` is **outbound**.
+
+### Mapping coverage — the check that will reject your template
+
+Every `event.<field>` any fold handler reads must be supplied by some emission's
+`payload_mapping`. This is mechanically checked; a template that violates it will not
+compile:
+
+```bash
+micro-app check --template micro-app-template.json
+```
+
+Run it before you commit. It needs no vault and no keri stack.
+
 ## Step 5 — Aggregates
 
 **Goal:** Define the local state this role tracks.
@@ -203,6 +234,24 @@ Aggregates are typically TEL-backed (when tracking credential lifecycle) or KEL-
 5. **Log scope** — `private` | `witnessed` | `shared`
 
 **Fold-op gotcha (applies to projection folds too, Step 8):** every fold-op field is a **CEL expression string** — including `increment`'s `by`, which must be written `"by": "1"` / `"by": "-1"`, never a bare JSON number. The meta-schema rejects numeric `by` with an opaque "not valid under any of the given schemas" error on the whole handler.
+
+### `instance_key` is a routing selector, not an identifier
+
+**It must name a field every source event supplies** — routing precedes the handler. If
+one emission of one event type in this aggregate's `fold` map omits that field, that event
+is not mis-folded, it is **un-appendable**: it never lands at all, silently.
+
+```json
+"boundary": { "instance_key": "event.product_id", "inception_event_type": "workspace_created" }
+```
+
+Then **every** emission targeting **every** event type in this aggregate's fold must
+include `product_id` in its `payload_mapping`. A constant (`"'license_registry'"`) always
+routes and is always safe.
+
+This is the corpus's most-repeated blocker class — one anchor template shipped with 13
+un-appendable emissions and passed every other gate. A fold *test vector cannot catch it*,
+because the vector supplies its own event payload; only the static check can.
 
 ## Step 6 — Reactions
 
@@ -248,6 +297,12 @@ For each:
 3. **Fold** — CEL handler map (op list or raw reducer) over `{ row, event }` (or `{ state, event }` for `object`-shape projections) producing the row/state
 4. **Access** — row_filter_rule_ref, lens_rule_ref
 5. **Display** — view_type (table | list | cards | kanban | timeline | summary), columns, default_sort, empty_state
+
+### `primary_key` has the identical rule
+
+**It must name a field every source event supplies** (routing precedes the handler). Check
+every entry in `source_events`, not just the obvious one — a projection sourcing four event
+types needs the key in all four emissions, or those rows are never created.
 
 ## Step 9 — Rules
 
