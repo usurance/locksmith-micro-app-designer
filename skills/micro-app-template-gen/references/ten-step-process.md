@@ -340,6 +340,100 @@ See `rule-types-reference.md` for detailed guidance per type.
 
 Walk the adversarial checklist (see `adversarial-prompts.md`). Document concerns in `metadata.author_intent_notes` or as out-of-band notes.
 
+## Vectors
+
+**Goal:** Every aggregate (Step 5) and projection (Step 8) you added ships `test_vectors[]` that a
+runtime can *execute*. Author them after Step 9 — an `expect_rejected_by` names a rule id, so the rules
+have to exist first — and before saidify.
+
+### The floor (this is required, not recommended)
+
+A new aggregate or projection MUST ship vectors such that:
+
+1. **every event type in its `fold` map appears** in some vector's `events[]` or `append`; and
+2. **every `invariants[]` entry is named by some vector's `expect_rejected_by`** — a vector that drives
+   the guard to actually fire.
+
+An invariant that is merely *evaluated* during an append that succeeds is **not** pinned. Only a
+rejection pins it, and the vector must name the *specific* rule id: rejection by a different invariant
+is a failure, not a pass.
+
+Landed units are held instead by a ratchet against `docs/micro-apps/coverage-baseline.json` — their
+coverage may only improve. A unit **absent** from the baseline is new work and is held to the floor
+above, 100% on both metrics. See spec §6.5.
+
+### The two shapes
+
+**Fold vector** — `{ name, events[], expected }`. `expected` is the *entire* folded state after the
+events, compared for exact equality. For a `collection`-shape projection, wrap it as `{"rows": [...]}`.
+
+```json
+{
+  "name": "receiving a license adds it to active_licenses",
+  "events": [
+    { "type": "license_received",
+      "payload": { "said": "EAbc...", "jurisdiction": "CA", "effective": "2026-08-01" } }
+  ],
+  "expected": {
+    "active_licenses": [
+      { "said": "EAbc...", "jurisdiction": "CA", "effective": "2026-08-01" }
+    ],
+    "expired_licenses": []
+  }
+}
+```
+
+**Invariant vector** — `{ name, events[], append, expect_rejected_by | expect_accepted }`. `events[]`
+folds the *prior* state; `append` is the one proposed event that the invariants are then evaluated
+against. Presence of `append` is what makes it an invariant vector.
+
+```json
+{
+  "name": "a second active license in the same jurisdiction is rejected",
+  "events": [
+    { "type": "license_received",
+      "payload": { "said": "EAbc...", "jurisdiction": "CA", "effective": "2026-08-01" } }
+  ],
+  "append": {
+    "type": "license_received",
+    "payload": { "said": "EDef...", "jurisdiction": "CA", "effective": "2026-09-01" }
+  },
+  "expect_rejected_by": "no_duplicate_active_license"
+}
+```
+
+Shape rules the runner enforces:
+
+- `append` and `expected` on the same vector is an error — the two shapes are mutually exclusive.
+- Only `expect_rejected_by` and `expect_accepted` are recognized; any other `expect_*` key is rejected
+  as a likely typo rather than silently defaulting to "expect accepted".
+- A vector with no `expect_*` key at all means *expect accepted*.
+- A fold vector whose `events[]` match **no** handler in the unit's `fold` map is an error, not a pass —
+  it would otherwise pass vacuously against `initial_state`. Usually a misspelled event `type`.
+
+### Run them
+
+```bash
+cd ~/code/concierge-api && PYTHONPATH=src ~/code/keripy/.venv/bin/python -m concierge_api_local.cli.microapp \
+  vectors --template <abs path to micro-app-template.json> \
+  --baseline <abs path to docs/micro-apps/coverage-baseline.json>
+```
+
+Must exit 0. The gate **executes** the vectors; writing one is not the same as running it.
+
+### Two warnings
+
+**A vector cannot catch a routing defect.** It supplies its own event payloads, so it passes while the
+real emission omits the routing field. That is why `boundary.instance_key` / `primary_key` are checked
+statically by `micro-app check`, and why writing a vector is not a substitute for running it.
+
+**Write the rejection vector, not just the happy path.** The corpus went four bundles with *zero*
+`expect_rejected_by` vectors, and two confirmed blockers hid in exactly that gap.
+
+And know what a green run does **not** prove: handler coverage measures *reach*, not *strength* — a
+vector whose `expected` asserts little still marks its handlers covered — and pinning an invariant proves
+the guard *can* fire, not that it fires on every path that should trip it.
+
 ## Save and saidify
 
 1. Run `scripts/micro_app_validate.py --input <path>` — must pass.

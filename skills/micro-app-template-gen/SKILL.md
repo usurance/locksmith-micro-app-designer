@@ -56,6 +56,10 @@ The 10-step process is **rigid in order**. Step N's questions depend on Step N-1
 Plus:
 
 - **Adversarial review** (between Step 10 and save) — walk `references/adversarial-prompts.md` checklist
+- **Author the vectors** (after Step 9 — an `expect_rejected_by` names a rule id, so the rules must exist
+  — and before saidify) — every aggregate and projection you added needs `test_vectors[]` at the coverage
+  floor: one vector reaching each `fold` handler, and an `expect_rejected_by` vector naming each
+  invariant. See `references/ten-step-process.md` §Vectors.
 - **Saidify and validate** — run `scripts/micro_app_saidify.py --in-place` then `scripts/micro_app_validate.py --lint` (meta-schema + xrefs + SAD/SAID + ACDC-schema compliance)
 
 ## Reference files
@@ -136,6 +140,20 @@ python scripts/micro_app_saidify.py --input docs/micro-apps/{path}/micro-app-tem
 ```
 
 Both must exit 0.
+
+Then run the behavioral coverage gate, which **executes** your `test_vectors[]`:
+
+```bash
+cd ~/code/concierge-api && PYTHONPATH=src ~/code/keripy/.venv/bin/python -m concierge_api_local.cli.microapp \
+  vectors --template <abs path to docs/micro-apps/{path}/micro-app-template.json> \
+  --baseline <abs path to docs/micro-apps/coverage-baseline.json>
+```
+
+Must exit 0. Your new units are absent from the baseline, so they are held to 100% on both metrics
+(every `fold` handler exercised, every invariant pinned by an `expect_rejected_by`). **Run the vectors —
+do not merely write them**; the runner has twice turned an argument into a fact. This gate is not wired
+into `micro-app build`, which stays hermetic, and it cannot see routing defects — keep running
+`micro-app check` (ten-step §Step 4) as well.
 
 `--lint` runs the SAD/SAID + ACDC-schema compliance linter over the whole template
 directory (checks S01–S09 per `schemas/*.json`, T01–T07 cross-file; catalog in
