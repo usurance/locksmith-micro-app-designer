@@ -141,7 +141,20 @@ python scripts/micro_app_saidify.py --input docs/micro-apps/{path}/micro-app-tem
 
 Both must exit 0.
 
-Then run the behavioral coverage gate, which **executes** your `test_vectors[]`:
+Then the two concierge-api gates. **Both must exit 0**, and they cover different things — neither
+substitutes for the other.
+
+`micro-app check` — the static gate. It is the **only** one that sees routing and emission-binding
+defects (`boundary.instance_key` / `primary_key` coverage, every `event.<field>` a fold reads being
+supplied by some emission's `payload_mapping`). A test vector structurally cannot catch these, because
+it supplies its own event payloads. Needs no vault and no keri stack.
+
+```bash
+cd ~/code/concierge-api && PYTHONPATH=src ~/code/keripy/.venv/bin/python -m concierge_api_local.cli.microapp \
+  check --template <abs path to docs/micro-apps/{path}/micro-app-template.json>
+```
+
+`micro-app vectors` — the behavioral coverage gate. It **executes** your `test_vectors[]`.
 
 ```bash
 cd ~/code/concierge-api && PYTHONPATH=src ~/code/keripy/.venv/bin/python -m concierge_api_local.cli.microapp \
@@ -149,11 +162,10 @@ cd ~/code/concierge-api && PYTHONPATH=src ~/code/keripy/.venv/bin/python -m conc
   --baseline <abs path to docs/micro-apps/coverage-baseline.json>
 ```
 
-Must exit 0. Your new units are absent from the baseline, so they are held to 100% on both metrics
-(every `fold` handler exercised, every invariant pinned by an `expect_rejected_by`). **Run the vectors —
-do not merely write them**; the runner has twice turned an argument into a fact. This gate is not wired
-into `micro-app build`, which stays hermetic, and it cannot see routing defects — keep running
-`micro-app check` (ten-step §Step 4) as well.
+Your new units are absent from the baseline, so they are held to 100% on both metrics (every `fold`
+handler exercised, every invariant pinned by an `expect_rejected_by`). **Run the vectors — do not merely
+write them**; the runner has twice turned an argument into a fact. This gate is deliberately not wired
+into `micro-app build`, which stays hermetic.
 
 `--lint` runs the SAD/SAID + ACDC-schema compliance linter over the whole template
 directory (checks S01–S09 per `schemas/*.json`, T01–T07 cross-file; catalog in

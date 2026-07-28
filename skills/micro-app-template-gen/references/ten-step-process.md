@@ -216,7 +216,8 @@ Every `event.<field>` any fold handler reads must be supplied by some emission's
 compile:
 
 ```bash
-micro-app check --template micro-app-template.json
+cd ~/code/concierge-api && PYTHONPATH=src ~/code/keripy/.venv/bin/python -m concierge_api_local.cli.microapp \
+  check --template <abs path to micro-app-template.json>
 ```
 
 Run it before you commit. It needs no vault and no keri stack.
@@ -358,11 +359,21 @@ An invariant that is merely *evaluated* during an append that succeeds is **not*
 rejection pins it, and the vector must name the *specific* rule id: rejection by a different invariant
 is a failure, not a pass.
 
-Landed units are held instead by a ratchet against `docs/micro-apps/coverage-baseline.json` — their
-coverage may only improve. A unit **absent** from the baseline is new work and is held to the floor
-above, 100% on both metrics. See spec §6.5.
+Landed units are held instead by a ratchet against `docs/micro-apps/coverage-baseline.json`. A unit the
+baseline **lists** fails if *either* its coverage ratio drops *or* its uncovered count
+(`handlers - exercised`, `invariants - pinned`) grows — both rules, either one tripping, because a ratio
+cannot see growth at a zero numerator (`0/7 -> 0/8` compares equal). A unit **absent** from the baseline
+is new work and is held to the floor above, 100% on both metrics. See spec §6.5.
 
 ### The two shapes
+
+**A vector nests its fields under `payload`, but a fold expression reads them unnested as
+`event.<field>`** — `_flatten_event` spreads `payload` up to the top level. Two consequences: write
+`event.jurisdiction`, never `event.payload.jurisdiction`; and a payload field must not collide with an
+**envelope** field, because the envelope wins. `type`, `said`, `seq`, `source_aid` and `datetime` are
+envelope names (cheat-sheet §2) — a payload named `said` is silently overwritten by the envelope's,
+which is `""` when the event doesn't carry one. That is why the corpus writes `license_said`,
+`application_said`, `index_said` and never a bare `said`.
 
 **Fold vector** — `{ name, events[], expected }`. `expected` is the *entire* folded state after the
 events, compared for exact equality. For a `collection`-shape projection, wrap it as `{"rows": [...]}`.
@@ -372,11 +383,11 @@ events, compared for exact equality. For a `collection`-shape projection, wrap i
   "name": "receiving a license adds it to active_licenses",
   "events": [
     { "type": "license_received",
-      "payload": { "said": "EAbc...", "jurisdiction": "CA", "effective": "2026-08-01" } }
+      "payload": { "license_said": "EAbc...", "jurisdiction": "CA", "effective": "2026-08-01" } }
   ],
   "expected": {
     "active_licenses": [
-      { "said": "EAbc...", "jurisdiction": "CA", "effective": "2026-08-01" }
+      { "license_said": "EAbc...", "jurisdiction": "CA", "effective": "2026-08-01" }
     ],
     "expired_licenses": []
   }
@@ -392,11 +403,11 @@ against. Presence of `append` is what makes it an invariant vector.
   "name": "a second active license in the same jurisdiction is rejected",
   "events": [
     { "type": "license_received",
-      "payload": { "said": "EAbc...", "jurisdiction": "CA", "effective": "2026-08-01" } }
+      "payload": { "license_said": "EAbc...", "jurisdiction": "CA", "effective": "2026-08-01" } }
   ],
   "append": {
     "type": "license_received",
-    "payload": { "said": "EDef...", "jurisdiction": "CA", "effective": "2026-09-01" }
+    "payload": { "license_said": "EDef...", "jurisdiction": "CA", "effective": "2026-09-01" }
   },
   "expect_rejected_by": "no_duplicate_active_license"
 }
