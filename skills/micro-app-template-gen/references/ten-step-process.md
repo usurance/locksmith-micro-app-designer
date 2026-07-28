@@ -376,7 +376,7 @@ which is `""` when the event doesn't carry one. That is why the corpus writes `l
 `application_said`, `index_said` and never a bare `said`.
 
 **Fold vector** — `{ name, events[], expected }`. `expected` is the *entire* folded state after the
-events, compared for exact equality. For a `collection`-shape projection, wrap it as `{"rows": [...]}`.
+events, compared for exact equality.
 
 ```json
 {
@@ -393,6 +393,32 @@ events, compared for exact equality. For a `collection`-shape projection, wrap i
   }
 }
 ```
+
+**Fold vector, `collection`-shape projection** — same shape, but `expected` is wrapped as
+`{"rows": …}` and **`rows` is an object keyed by `primary_key`, not a list**. The engine's fold returns
+`dict[key, row]` for a collection, so a list never compares equal and you get a diff that is hard to
+read. Note that `primary_key` is a bare field name (`"license_said"`), not a CEL expression.
+
+```json
+{
+  "name": "each granted license becomes one row, keyed by license_said",
+  "events": [
+    { "type": "license_granted",
+      "payload": { "license_said": "ELic1...", "jurisdiction": "US-CA", "granted_at": "2026-08-10T00:00:00Z" } },
+    { "type": "license_granted",
+      "payload": { "license_said": "ELic2...", "jurisdiction": "US-UT", "granted_at": "2026-08-11T00:00:00Z" } }
+  ],
+  "expected": {
+    "rows": {
+      "ELic1...": { "license_said": "ELic1...", "jurisdiction": "US-CA", "granted_at": "2026-08-10T00:00:00Z" },
+      "ELic2...": { "license_said": "ELic2...", "jurisdiction": "US-UT", "granted_at": "2026-08-11T00:00:00Z" }
+    }
+  }
+}
+```
+
+A `delete` op removes that key outright, so the vector covering it lists the remaining keys only — and
+you need one, because the floor counts `license_revoked` as its own handler.
 
 **Invariant vector** — `{ name, events[], append, expect_rejected_by | expect_accepted }`. `events[]`
 folds the *prior* state; `append` is the one proposed event that the invariants are then evaluated
