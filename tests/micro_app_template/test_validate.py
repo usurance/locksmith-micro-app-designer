@@ -729,7 +729,32 @@ def test_validation_engine_surfaces_vector_coverage_as_a_warning_not_an_error(
     assert all(w.severity == "warning" for w in report.warnings)
 
 
-def test_both_worked_examples_pass_fold_semantics_cleanly(fixtures_dir):
+def test_both_worked_examples_pass_THIS_REPOS_fold_semantics_validator(fixtures_dir):
+    """`validate_fold_semantics` only — NOT the binding gate, and not a clean bill of health.
+
+    This test was previously named `..._pass_fold_semantics_cleanly`, and that name
+    was the defect. Register finding 28 (ugard,
+    `backlog/2026-07-25-ipc-corpus-cross-template-reconciliation.md`): for a period
+    this test passed while both worked examples carried live binding defects — 5
+    errors in `regulator-grants-carrier-license`, 1 in `carrier-license-application`
+    under `micro-app check`. It passed because `validate_fold_semantics` does not
+    look at emission bindings at all, while the test's name claimed exactly the
+    cleanliness the gate refuted. These are the canonical examples every template
+    author copies from, so a falsely-green test here is the propagation path that
+    was blamed for five authors hitting the same defect class.
+
+    The authoritative binding gate lives in a sibling repo and is deliberately NOT
+    called from here — reimplementing it locally would be a second mechanism for one
+    rule, which is the failure mode this corpus's register explicitly warns against.
+    Run it separately; it is a numbered step in the skill's Validation block:
+
+        cd ~/code/concierge-api && PYTHONPATH=src <keripy-venv-python> \\
+            -m concierge_api_local.cli.microapp check --template <abs path>
+
+    So: what this test proves is that the two examples satisfy THIS repo's
+    fold-semantics validator. What it does not prove is that their emissions supply
+    the fields their folds and routing selectors read.
+    """
     import json
     examples_dir = (
         Path(__file__).parent.parent.parent

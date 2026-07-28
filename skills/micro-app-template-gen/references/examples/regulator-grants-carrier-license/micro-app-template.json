@@ -461,7 +461,7 @@
           "aggregate_id": "license_registry",
           "event_type": "license_granted",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_number\": command.license_number, \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"effective_date\": command.effective_date, \"expiration_date\": command.expiration_date, \"application_id\": command.application_id, \"granted_at\": command.granted_at }"
+          "payload_mapping": "{ \"license_said\": credential.said, \"holder_aid\": command.holder_aid, \"license_number\": command.license_number, \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"effective_date\": command.effective_date, \"expiration_date\": command.expiration_date, \"application_id\": command.application_id, \"granted_at\": command.granted_at }"
         }
       ],
       "id": "grant_license",
@@ -484,6 +484,10 @@
           "granted_at": {
             "description": "Regulator-stated date/time the grant takes administrative effect. Client-supplied (mirrors effective_date/expiration_date): the command's {command, state} binding has no runtime clock, so this cannot be sourced from an event envelope that doesn't exist yet at emission time.",
             "format": "date-time",
+            "type": "string"
+          },
+          "holder_aid": {
+            "description": "AID of the carrier receiving this licence — the applicant on the application being adjudicated. Client-supplied for the same reason granted_at is: the command's {command, state} binding has no accessor for the counterparty's AID, and the regulator already holds it from the inbound application.",
             "type": "string"
           },
           "jurisdiction": {
@@ -519,6 +523,7 @@
         "required": [
           "application_id",
           "license_number",
+          "holder_aid",
           "jurisdiction",
           "lines_of_business",
           "effective_date",
@@ -853,7 +858,7 @@
       }
     ]
   },
-  "d": "ENqd2iGFI4gFnV7IOhTosN5yMudPfZpe-0uQv1u8zB3D",
+  "d": "EDKqYFkYi5G9iceVcfee7y2jXmNI2ydjMh4R2Sma3c3j",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",

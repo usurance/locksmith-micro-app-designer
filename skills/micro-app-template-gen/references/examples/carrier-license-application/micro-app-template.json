@@ -270,7 +270,7 @@
           "aggregate_id": "license_registry",
           "event_type": "application_submitted",
           "kind": "aggregate_event",
-          "payload_mapping": "{ \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"submitted_at\": command.submitted_at }"
+          "payload_mapping": "{ \"application_said\": credential.said, \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"submitted_at\": command.submitted_at }"
         }
       ],
       "id": "submit_application",
@@ -423,7 +423,7 @@
       }
     ]
   },
-  "d": "EBTP1zVbY_KjEBlafARtCwJPyD-cKPFknUL08AazZJDP",
+  "d": "EKq_OB3uYT_Y80jP1HlGsssfhicB5M7yq9owjggy0jAr",
   "header": {
     "description": "The carrier's side of license application: a startup insurance carrier submits an application to a state regulator and processes the resulting grant or revocation. Pivotal event: an application has been submitted and adjudicated.",
     "display_name": "Carrier Applies for License",
