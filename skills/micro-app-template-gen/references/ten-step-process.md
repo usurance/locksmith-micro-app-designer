@@ -192,50 +192,74 @@ Stamp the SAIDs with `python scripts/saidify_acdc_schema.py schemas/{credential_
 
 ### The just-issued credential's SAID
 
-A `payload_mapping` sees `{command, state}` — and **neither can name the credential this
-command is issuing**. Its SAID does not exist until the issuance runs. Use the binding
-the authoring spec pins for exactly this (§6.4):
+**The envelope carries the SAID of the credential this emission issues. You do not name it,
+and you cannot rename it.**
+
+An emission cannot name the credential its command is issuing — that SAID does not exist
+until the issuance runs. So it is not a payload property at all: the runtime stamps it on
+the event envelope as `credential_said`, and your fold handler reads it directly:
 
 ```json
-"payload_mapping": "{ \"version_said\": credential.said, \"product_id\": command.product_id }"
+"fold": { "version_registered": [
+  { "op": "set", "target": "said", "value": "event.credential_said" }
+] }
 ```
 
-- `credential.said` is available only **at or after** the `kind: credential` exchange
-  emission that issues the export, in the same `emissions[]` list. Put the issuing
-  exchange first.
-- It is the **only** thing you need this binding for. Every attribute value is already in
-  `command.*`, because your command supplied them — the SAID is the one value issuance
-  *creates* rather than *consumes*.
-- Do **not** confuse it with `event.credential` (Step 6, reactions): that is the
-  **inbound** credential that triggered a reaction. Bare `credential` is **outbound**.
+- Do **not** declare `credential_said` (or any other envelope name) as a property of your
+  event's `payload_schema`. It is reserved — the fold engine stamps the envelope *over* the
+  payload, so a payload property with that name is silently discarded.
+- The value is meaningful only when the emission list contains a `kind: credential` exchange
+  emission at or before this one. Put the issuing exchange first.
+- Every *attribute* value is already in `command.*`, because your command supplied them. The
+  SAID is the one value issuance *creates* rather than *consumes* — which is exactly why it
+  lives on the envelope and not in your contract.
+- Inbound is the same shape: a reaction triggered by `credential_received` reads the
+  triggering credential's SAID as `event.credential_said`, its issuer as
+  `event.credential_issuer`, and its resolved edges as `event.credential_edges.<name>`.
 
-### `payload_mapping` satisfies a declared event; it does not define one
+### Your event's property names ARE the binding
 
-Its target is the `payload_schema` you declared for that `event_type` in the aggregate's `events` map
-(Step 5). The mapping's job is to produce a payload conforming to that contract — a rename, a
-discriminator literal, a `credential.said`, a flattening of an inbound ACDC — not to be the place the
-event's shape is decided.
+There is no mapping slot. An `aggregate_event` emission is `{kind, aggregate_id, event_type}`
+and nothing else — the meta-schema *rejects* any other key. **Every property you declare in
+that event type's `payload_schema` (Step 5) binds to the same-named field of the trigger
+context.** With no slot there is nowhere to rename, which is the point.
 
-**`payload_mapping` is being REMOVED at `micro-app-template/0.2`** — owner decision 2026-07-28. Not made
-optional: removed. Every event property will bind to the same-named field of the trigger context
-(`command.<name>`, `event.<name>`, or `event.credential.attributes.<name>`), credential provenance moves
-to the event envelope, and discriminator literals become named event types with the literal in the fold
-handler. The plan is `ugard/backlog/2026-07-28-remove-payload-mapping.md`.
+The three trigger surfaces — which one applies depends on what fires the emission:
 
-**Until that lands, write complete, explicit mappings exactly as the landed bundles do** — every key
-spelled out. No tool implements conform-by-name yet, so a partial or omitted mapping fails
-`micro-app check` with `uncovered_field` errors today.
+| Trigger | A declared property `foo` binds to |
+|---|---|
+| Command | `command.foo` — a field of the command's `payload_schema` |
+| Reaction on an inbound exn | `event.foo` — a field of the inbound note's payload |
+| Reaction on `credential_received` | `event.credential.attributes.foo` — an ACDC attribute |
 
-**Author every event property with the same name as its source.** This is the habit that survives the
-removal: if the command field is `decided_at`, name the event property `decided_at`, not `exited_at`.
-After `0.2` there is nowhere to rename, so a mismatch becomes an error rather than a mapping entry. The
-corpus contains 15 such renames and most of them are drift, not design.
+A `required` property with no same-named field on its trigger is an `unsupplied_property`
+error. The fix is to make the names agree — rename the *command* field where the event's
+name is the better one — not to reach for a transform, because there isn't one.
 
-### Mapping coverage — the check that will reject your template
+**The eight reserved envelope names.** The fold engine stamps these over the payload, so a
+`payload_schema` MUST NOT declare any of them:
 
-Every `event.<field>` any fold handler reads must be supplied by some emission's
-`payload_mapping`. This is mechanically checked; a template that violates it will not
-compile:
+`type`, `said`, `seq`, `source_aid`, `datetime`, `credential_said`, `credential_issuer`,
+`credential_edges`
+
+A fold handler reads them directly and they need no producer: `event.datetime` rather than a
+`granted_at` property, `event.credential_said` rather than a copied `license_said`.
+
+**Two things that used to be mapping tricks, and where they go now:**
+
+- **A discriminator literal** — one producer writing `kind: 'compliance'` so a shared event
+  type can be told apart — becomes **two named event types**, with the literal moved into
+  each type's fold handler. See Step 5.
+- **A rename at a wire boundary** — your local vocabulary differs from the counterparty's —
+  moves to the **fold**, which is legal and visible: declare the property under the wire's
+  name and have the handler write your local name from it. Renaming at the emission is not
+  legal, because there is no emission-side expression to do it in.
+
+### Fold coverage — the check that will reject your template
+
+Every `event.<field>` any fold handler reads must be a `required` property of that event
+type's declared `payload_schema`, or one of the eight envelope names. This is mechanically
+checked; a template that violates it will not compile:
 
 ```bash
 cd ~/code/concierge-api && PYTHONPATH=src ~/code/keripy/.venv/bin/python -m concierge_api_local.cli.microapp \
@@ -302,9 +326,8 @@ Four rules the meta-schema enforces, so getting them wrong fails `micro_app_vali
   carrier's carries four, and both are correct. Events never cross a template boundary; exchanges do.
   Cross-role shape agreement belongs on the wire, never on an event name.
 
-**Status:** `events` is **optional** at `micro-app-template/0.1` and becomes **required** at `0.2`.
-Declare it now — it is additive, it cannot break your other gates, and at `0.2` your `payload_mapping`s
-get trimmed mechanically against it.
+**`events` is REQUIRED.** It is the only description of an event's contract — there is no mapping
+left to infer one from — so an aggregate without it does not validate.
 
 **Fold-op gotcha (applies to projection folds too, Step 8):** every fold-op field is a **CEL expression string** — including `increment`'s `by`, which must be written `"by": "1"` / `"by": "-1"`, never a bare JSON number. The meta-schema rejects numeric `by` with an opaque "not valid under any of the given schemas" error on the whole handler.
 
@@ -318,9 +341,8 @@ is not mis-folded, it is **un-appendable**: it never lands at all, silently.
 "boundary": { "instance_key": "event.product_id", "inception_event_type": "workspace_created" }
 ```
 
-Then **every** emission targeting **every** event type in this aggregate's fold must
-include `product_id` in its `payload_mapping`. A constant (`"'license_registry'"`) always
-routes and is always safe.
+Then **every** event type in this aggregate's fold must declare `product_id` as a
+`required` property. A constant (`"'license_registry'"`) always routes and is always safe.
 
 This is the corpus's most-repeated blocker class — one anchor template shipped with 13
 un-appendable emissions and passed every other gate. A fold *test vector cannot catch it*,

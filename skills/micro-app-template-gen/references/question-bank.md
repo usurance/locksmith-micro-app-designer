@@ -69,6 +69,11 @@ Per-step questions to ask an SME. Pick the primary question first; ask follow-up
 **Follow-ups per aggregate:**
 - *"What history must I read to know if a command is valid?"* — that's the aggregate
 - *"What's its identifier and how is it minted? (inception event)"* — the `boundary.inception_event_type`; also ask *"which field on the event picks out one instance from another?"* — the `boundary.instance_key`
+- **What does each event in this aggregate's log record?** Name each event type in the past tense,
+  and for each one: which properties does it carry, which are always present, and which are
+  genuinely optional? Anything a fold handler reads must be always-present.
+- **Does any event type have more than one producer?** If two triggers would write the same event
+  type with a literal telling them apart, those are two event types. Name them separately.
 - *"Walk each event type this aggregate cares about — for each, what happens to the state? Is it a simple field set/append/remove (an op list), or does it need a full custom reducer (a raw CEL expression)?"* — this builds the `fold` handler map, one entry per event type
 - *"What test vectors prove each fold handler does what you just said? Give me a couple of `(events in) → (state out)` examples per handler."* — `test_vectors`
 - *"What invariants does it protect? (plain English; will become validation rules)"*
