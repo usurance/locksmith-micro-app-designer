@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://locksmith/spec/micro-app-template/0.1",
+  "$id": "https://locksmith/spec/micro-app-template/0.2",
   "title": "Micro-App Template",
   "description": "Canonical artifact describing one role's slice of operational behavior in a KERI-native ecosystem application.",
   "type": "object",
@@ -301,12 +301,12 @@
           }
         },
         {
-          "required": ["kind", "aggregate_id", "event_type", "payload_mapping"],
+          "required": ["kind", "aggregate_id", "event_type"],
+          "additionalProperties": false,
           "properties": {
             "kind": { "const": "aggregate_event" },
             "aggregate_id": { "type": "string" },
-            "event_type": { "type": "string" },
-            "payload_mapping": { "type": "string" }
+            "event_type": { "type": "string" }
           }
         }
       ]
@@ -431,7 +431,7 @@
     },
     "aggregate": {
       "type": "object",
-      "required": ["id", "description", "boundary", "state_schema", "initial_state", "fold", "log_scope"],
+      "required": ["id", "description", "boundary", "state_schema", "initial_state", "events", "fold", "log_scope"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },

@@ -67,14 +67,47 @@ def _validate_declaration(decl):
     _validator_for("event_declaration").validate(decl)
 
 
+def _schema():
+    return SCHEMA
+
+
+def _emission_errors(emission):
+    return list(_validator_for("emission").iter_errors(emission))
+
+
+def test_payload_mapping_is_rejected_not_merely_unrequired():
+    """$defs/emission has no additionalProperties:false, so dropping the key
+    from `required` alone would leave it silently permitted."""
+    em = {"kind": "aggregate_event", "aggregate_id": "a", "event_type": "e",
+          "payload_mapping": '{ "x": command.x }'}
+    assert _emission_errors(em), "payload_mapping must be rejected"
+
+
+def test_spec_id_is_0_2():
+    assert _schema()["$id"].endswith("micro-app-template/0.2")
+
+
 def test_aggregate_accepts_an_events_map():
     """The widening itself: an aggregate with `events` validates."""
     _validator_for("event_map").validate({"license_received": _declaration()})
 
 
-def test_events_is_optional_on_the_aggregate():
-    """0.1 posture. `events` must NOT be in the aggregate's required list."""
-    assert "events" not in _defs()["aggregate"]["required"]
+def test_events_is_required_on_the_aggregate():
+    """0.2 posture. This test is the deliberate inversion of the 0.1-era
+    `test_events_is_optional_on_the_aggregate`, which asserted the opposite.
+
+    The flip is not a mistake and must not be flipped back. At 0.1 `events` was
+    optional because the declaration was forward-compatible authoring and the
+    concierge-api checks had not landed. At 0.2 `payload_mapping` is REMOVED, so
+    the declaration is the *only* description of an event's contract — there is
+    no mapping left to infer one from. An aggregate without `events` would
+    therefore have no checkable event contract at all, which is precisely the
+    inference the removal exists to end.
+
+    Driven by: owner review 2026-07-28; ugard
+    `backlog/2026-07-28-remove-payload-mapping.md`.
+    """
+    assert "events" in _defs()["aggregate"]["required"]
     assert "events" in _defs()["aggregate"]["properties"]
 
 

@@ -230,7 +230,7 @@ from locksmith_micro_app_designer.template.xref import validate_xrefs
             "commands": [{
                 "id": "c1", "name": "c", "description": "c", "route": "/x/cmd/c",
                 "payload_schema": {}, "idempotency_key_expression": "hash(p)",
-                "emissions": [{"kind": "aggregate_event", "aggregate_id": "missing-agg", "event_type": "e", "payload_mapping": "m"}],
+                "emissions": [{"kind": "aggregate_event", "aggregate_id": "missing-agg", "event_type": "e"}],
             }],
         },
         "missing-agg",
@@ -385,6 +385,16 @@ def test_aggregate_validates(minimal_valid_template):
             "properties": {"active": {"type": "array"}}
         },
         "initial_state": {"active": []},
+        "events": {
+            "license_received": {
+                "payload_schema": {
+                    "type": "object",
+                    "properties": {"license_id": {"type": "string"}},
+                    "required": ["license_id"],
+                    "additionalProperties": False,
+                }
+            }
+        },
         "fold": {
             "license_received": [
                 {"op": "append", "target": "active", "value": "event.license_id"}
@@ -597,6 +607,9 @@ def test_vector_coverage_floor_is_a_warning_not_an_error(minimal_valid_template)
         "description": "d",
         "boundary": {"inception_event_type": "e", "instance_key": "event.id"},
         "state_schema": {}, "initial_state": {},
+        "events": {"e": {"payload_schema": {
+            "type": "object", "properties": {"id": {"type": "string"}},
+            "required": ["id"], "additionalProperties": False}}},
         "fold": {"e": [{"op": "set", "target": "x", "value": "1"}]},
         "invariants": [], "log_scope": "private",
         # test_vectors omitted entirely.
@@ -719,6 +732,9 @@ def test_validation_engine_surfaces_vector_coverage_as_a_warning_not_an_error(
         "description": "d",
         "boundary": {"inception_event_type": "e", "instance_key": "event.id"},
         "state_schema": {}, "initial_state": {},
+        "events": {"e": {"payload_schema": {
+            "type": "object", "properties": {"id": {"type": "string"}},
+            "required": ["id"], "additionalProperties": False}}},
         "fold": {"e": [{"op": "set", "target": "x", "value": "1"}]},
         "invariants": [], "log_scope": "private",
     })
