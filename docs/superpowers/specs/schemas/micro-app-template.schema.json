@@ -394,8 +394,19 @@
             "properties": {
               "type": "object",
               "propertyNames": {
-                "not": { "enum": ["type", "said", "seq", "source_aid", "datetime"] },
-                "description": "Envelope-reserved names. The fold engine stamps these over the payload, so a payload property of one of these names is silently discarded."
+                "not": { "enum": ["type", "said", "seq", "source_aid", "datetime",
+                                  "credential_said", "credential_issuer", "credential_edges"] },
+                "description": "Envelope-reserved names -- all eight the event envelope supplies: the five wire/log fields (type, said, seq, source_aid, datetime) plus the credential provenance triple (credential_said, credential_issuer, credential_edges). The fold engine stamps these over the payload, so a payload property of one of these names is silently discarded."
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "enum": ["type", "said", "seq", "source_aid", "datetime",
+                             "credential_said", "credential_issuer", "credential_edges"],
+                    "description": "The declared mint (owner ruling 2026-07-28, register finding 37): this property's value is materialized at append time from the named envelope slot. Closed enumeration -- no expressions, no renames; the property name IS the domain name. One declaration per event type. Reach for it ONLY where a kind-3 identity is minted from a credential SAID (authoring spec 5.7/6.5)."
+                  }
+                }
               }
             }
           }

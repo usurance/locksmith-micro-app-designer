@@ -11,14 +11,24 @@ aggregate definition carries `additionalProperties: false`, so without this
 widening the block could not be authored at all — that is why the meta-schema
 change is on the children's critical path and the checker is not.
 
-Two rules ARE enforced here rather than deferred to the checker, because they are
+Three rules ARE enforced here rather than deferred to the checker, because they are
 load-bearing and the checker is follow-on work:
 
   1. `additionalProperties: false` on the payload_schema. A contract that is not
      closed merely restates the inference the declaration exists to replace.
-  2. The five envelope-reserved names. `computes/fold_engine._flatten_event`
-     stamps type/said/seq/source_aid/datetime OVER the payload, so a payload
-     property with one of those names is silently discarded at fold time.
+  2. The eight envelope-reserved names. `computes/fold_engine._flatten_event`
+     stamps type/said/seq/source_aid/datetime, plus the credential provenance
+     triple (credential_said/credential_issuer/credential_edges), OVER the
+     payload, so a payload property with one of those names is silently
+     discarded at fold time. Grown from five to eight 2026-07-28 to match the
+     checker's `emission_bindings.RESERVED_ENVELOPE` (register finding 37) --
+     a prior-session gap where two mechanisms disagreed on one rule.
+  3. The declared mint (`from`). An event-schema property may instead declare
+     `"from": "<envelope slot>"` -- a closed enum of the eight names above,
+     nothing else: no expressions, no renames. The property name IS the
+     domain name; `from` only names which envelope slot mints its value at
+     append time. One declaration per event type. Owner ruling 2026-07-28,
+     register finding 37; authoring spec §6.5.
 """
 import json
 import pathlib
@@ -30,7 +40,10 @@ SCHEMA = json.loads(
     pathlib.Path("docs/superpowers/specs/schemas/micro-app-template.schema.json").read_text()
 )
 
-RESERVED_ENVELOPE_NAMES = ["type", "said", "seq", "source_aid", "datetime"]
+RESERVED_ENVELOPE_NAMES = [
+    "type", "said", "seq", "source_aid", "datetime",
+    "credential_said", "credential_issuer", "credential_edges",
+]
 
 
 def _defs():
@@ -159,6 +172,69 @@ def test_reserved_list_matches_the_fold_engine():
         "properties"
     ]["propertyNames"]["not"]["enum"]
     assert sorted(guard) == sorted(RESERVED_ENVELOPE_NAMES)
+
+
+# --------------------------------------------------------------------------------
+# The declared mint (`from`) -- owner ruling 2026-07-28, register finding 37
+# --------------------------------------------------------------------------------
+
+def test_from_mint_on_credential_said_validates():
+    """The worked corpus example (authoring spec §6.5): `application_id` is a
+    stable business key minted, at this event type, from the credential SAID the
+    same emission just admitted. The property name is the domain name;
+    `from` only names which envelope slot supplies its value."""
+    decl = _declaration(
+        properties={
+            "license_said": {"type": "string"},
+            "application_id": {"type": "string", "from": "credential_said"},
+        }
+    )
+    _validate_declaration(decl)
+
+
+def test_from_outside_the_enum_is_rejected():
+    """`from` is a closed enumeration of the eight envelope names -- no
+    expressions, no near-miss spellings, nothing computed."""
+    decl = _declaration(
+        properties={
+            "license_said": {"type": "string"},
+            "application_id": {"type": "string", "from": "credential"},
+        }
+    )
+    with pytest.raises(jsonschema.ValidationError):
+        _validate_declaration(decl)
+
+
+def test_from_on_a_reserved_property_name_is_rejected():
+    """A property can never be NAMED one of the eight reserved names, `from` or
+    not -- `from` mints INTO a differently-named domain property; it is not a
+    loophole for declaring the reserved name itself under a fresh alias. Also
+    pins the propertyNames growth from five to eight (change 1): `credential_said`
+    was not in the old five-name exclusion."""
+    decl = _declaration(
+        properties={
+            "license_said": {"type": "string"},
+            "credential_said": {"type": "string", "from": "credential_said"},
+        }
+    )
+    with pytest.raises(jsonschema.ValidationError):
+        _validate_declaration(decl)
+
+
+def test_credential_issuer_property_name_is_rejected_without_from():
+    """Pins the five-to-eight catch-up (change 1) on a name the old exclusion
+    missed outright: `credential_issuer` is not in RESERVED_ENVELOPE_NAMES's
+    original five, so a bare (no `from`) payload_schema property under that name
+    used to validate silently -- dead on arrival at fold time, same as the
+    original five."""
+    decl = _declaration(
+        properties={
+            "license_said": {"type": "string"},
+            "credential_issuer": {"type": "string"},
+        }
+    )
+    with pytest.raises(jsonschema.ValidationError):
+        _validate_declaration(decl)
 
 
 def test_landed_corpus_still_validates():
