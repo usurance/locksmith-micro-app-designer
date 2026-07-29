@@ -216,19 +216,20 @@ Its target is the `payload_schema` you declared for that `event_type` in the agg
 discriminator literal, a `credential.said`, a flattening of an inbound ACDC — not to be the place the
 event's shape is decided.
 
-**Write complete, explicit mappings, exactly as the landed bundles do.** Every key spelled out. At
-`micro-app-template/0.2` a mapping will become omissible where each event property binds to a
-same-named field of the trigger context, and present entries will merge over that default — but **no
-tool implements that yet**, so a partial or omitted mapping fails `micro-app check` with
-`uncovered_field` errors today. Declare the `events` block, keep the mappings full.
+**`payload_mapping` is being REMOVED at `micro-app-template/0.2`** — owner decision 2026-07-28. Not made
+optional: removed. Every event property will bind to the same-named field of the trigger context
+(`command.<name>`, `event.<name>`, or `event.credential.attributes.<name>`), credential provenance moves
+to the event envelope, and discriminator literals become named event types with the literal in the fold
+handler. The plan is `ugard/backlog/2026-07-28-remove-payload-mapping.md`.
 
-Two things conform-by-name will never do, so they always need an explicit entry — now and at `0.2`:
+**Until that lands, write complete, explicit mappings exactly as the landed bundles do** — every key
+spelled out. No tool implements conform-by-name yet, so a partial or omitted mapping fails
+`micro-app check` with `uncovered_field` errors today.
 
-- **`credential.said`** (the outbound credential this emission list just issued). A property named
-  `license_said` does *not* auto-resolve to it.
-- **`event.credential.attributes.*`** (the inbound credential that fired a reaction). Binding an
-  inbound ACDC's attribute names implicitly would let a counterparty's schema change silently re-bind
-  your durable log — which is exactly what the reaction-side mapping exists to prevent.
+**Author every event property with the same name as its source.** This is the habit that survives the
+removal: if the command field is `decided_at`, name the event property `decided_at`, not `exited_at`.
+After `0.2` there is nowhere to rename, so a mismatch becomes an error rather than a mapping entry. The
+corpus contains 15 such renames and most of them are drift, not design.
 
 ### Mapping coverage — the check that will reject your template
 
