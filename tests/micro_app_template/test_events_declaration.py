@@ -1,0 +1,144 @@
+# tests/micro_app_template/test_events_declaration.py
+"""The `aggregates[].events` declaration (authoring spec §6.5).
+
+Landed 2026-07-28 by the declared-event-schema decision
+(ugard docs/superpowers/specs/2026-07-28-declared-event-schema-design.md).
+
+`events` is OPTIONAL at micro-app-template/0.1 and REQUIRED at 0.2. At 0.1 its
+purpose is forward-compatible authoring: the three remaining IPC children declare
+their event contracts now, and the concierge-api checks land afterwards. The
+aggregate definition carries `additionalProperties: false`, so without this
+widening the block could not be authored at all — that is why the meta-schema
+change is on the children's critical path and the checker is not.
+
+Two rules ARE enforced here rather than deferred to the checker, because they are
+load-bearing and the checker is follow-on work:
+
+  1. `additionalProperties: false` on the payload_schema. A contract that is not
+     closed merely restates the inference the declaration exists to replace.
+  2. The five envelope-reserved names. `computes/fold_engine._flatten_event`
+     stamps type/said/seq/source_aid/datetime OVER the payload, so a payload
+     property with one of those names is silently discarded at fold time.
+"""
+import json
+import pathlib
+
+import jsonschema
+import pytest
+
+SCHEMA = json.loads(
+    pathlib.Path("docs/superpowers/specs/schemas/micro-app-template.schema.json").read_text()
+)
+
+RESERVED_ENVELOPE_NAMES = ["type", "said", "seq", "source_aid", "datetime"]
+
+
+def _defs():
+    return SCHEMA.get("$defs", SCHEMA.get("definitions", {}))
+
+
+def _declaration(properties=None, additional_properties=False, description="A thing happened."):
+    payload_schema = {
+        "type": "object",
+        "properties": {"license_said": {"type": "string"}} if properties is None else properties,
+        "required": ["license_said"],
+    }
+    if additional_properties is not None:
+        payload_schema["additionalProperties"] = additional_properties
+    decl = {"payload_schema": payload_schema}
+    if description is not None:
+        decl["description"] = description
+    return decl
+
+
+def _validator_for(definition):
+    """Validate a `$defs` fragment with the full schema as the resolution root.
+
+    `event_map` refs `event_declaration`, so validating the bare fragment the way
+    the older meta-schema tests do (they validate ref-free fragments) raises
+    PointerToNowhere instead of testing anything.
+    """
+    return jsonschema.Draft202012Validator(
+        {"$ref": f"#/$defs/{definition}", "$defs": SCHEMA["$defs"]}
+    )
+
+
+def _validate_declaration(decl):
+    _validator_for("event_declaration").validate(decl)
+
+
+def test_aggregate_accepts_an_events_map():
+    """The widening itself: an aggregate with `events` validates."""
+    _validator_for("event_map").validate({"license_received": _declaration()})
+
+
+def test_events_is_optional_on_the_aggregate():
+    """0.1 posture. `events` must NOT be in the aggregate's required list."""
+    assert "events" not in _defs()["aggregate"]["required"]
+    assert "events" in _defs()["aggregate"]["properties"]
+
+
+def test_well_formed_declaration_validates():
+    _validate_declaration(_declaration())
+
+
+def test_description_is_optional():
+    _validate_declaration(_declaration(description=None))
+
+
+def test_payload_schema_is_required():
+    with pytest.raises(jsonschema.ValidationError):
+        _validate_declaration({"description": "no schema"})
+
+
+def test_unknown_key_in_declaration_is_rejected():
+    decl = _declaration()
+    decl["bogus"] = 1
+    with pytest.raises(jsonschema.ValidationError):
+        _validate_declaration(decl)
+
+
+def test_open_contract_is_rejected_when_additional_properties_omitted():
+    with pytest.raises(jsonschema.ValidationError):
+        _validate_declaration(_declaration(additional_properties=None))
+
+
+def test_open_contract_is_rejected_when_additional_properties_true():
+    with pytest.raises(jsonschema.ValidationError):
+        _validate_declaration(_declaration(additional_properties=True))
+
+
+@pytest.mark.parametrize("reserved", RESERVED_ENVELOPE_NAMES)
+def test_envelope_reserved_name_is_rejected(reserved):
+    """A payload property named for an envelope field is dead on arrival — the
+    fold engine overwrites it. Reject at authoring time instead."""
+    decl = _declaration(
+        properties={"license_said": {"type": "string"}, reserved: {"type": "string"}}
+    )
+    with pytest.raises(jsonschema.ValidationError):
+        _validate_declaration(decl)
+
+
+def test_reserved_list_matches_the_fold_engine():
+    """Pins the list against the reason it exists. If `_flatten_event` ever stamps
+    a sixth envelope field, this list and the meta-schema must grow with it."""
+    guard = _defs()["event_declaration"]["properties"]["payload_schema"]["properties"][
+        "properties"
+    ]["propertyNames"]["not"]["enum"]
+    assert sorted(guard) == sorted(RESERVED_ENVELOPE_NAMES)
+
+
+def test_landed_corpus_still_validates():
+    """The widening must not regress the five landed bundles. Read out of ugard's
+    working tree, mirroring concierge-api's calibration test."""
+    corpus = sorted(
+        pathlib.Path("/Users/seriouscoderone/code/ugard/docs/micro-apps").glob(
+            "*/micro-app-template.json"
+        )
+    )
+    if not corpus:
+        pytest.skip("ugard corpus not available in this checkout")
+    validator = jsonschema.Draft202012Validator(SCHEMA)
+    for path in corpus:
+        errors = list(validator.iter_errors(json.loads(path.read_text())))
+        assert not errors, f"{path.parent.name}: {[e.message for e in errors]}"

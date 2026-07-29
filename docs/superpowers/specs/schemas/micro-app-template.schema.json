@@ -377,6 +377,35 @@
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/fold_handler" }
     },
+    "event_declaration": {
+      "type": "object",
+      "required": ["payload_schema"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "payload_schema": {
+          "type": "object",
+          "required": ["additionalProperties"],
+          "properties": {
+            "additionalProperties": {
+              "const": false,
+              "description": "An event contract must be closed; an open one merely restates the inference this declaration exists to replace."
+            },
+            "properties": {
+              "type": "object",
+              "propertyNames": {
+                "not": { "enum": ["type", "said", "seq", "source_aid", "datetime"] },
+                "description": "Envelope-reserved names. The fold engine stamps these over the payload, so a payload property of one of these names is silently discarded."
+              }
+            }
+          }
+        }
+      }
+    },
+    "event_map": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/event_declaration" }
+    },
     "test_vector_event": {
       "type": "object",
       "required": ["type", "payload"],
@@ -410,6 +439,7 @@
         "boundary": { "$ref": "#/$defs/boundary" },
         "state_schema": { "type": "object" },
         "initial_state": {},
+        "events": { "$ref": "#/$defs/event_map" },
         "fold": { "$ref": "#/$defs/fold_map" },
         "invariants": { "type": "array", "items": { "$ref": "#/$defs/rule_ref_obj" } },
         "log_scope": { "$ref": "#/$defs/log_scope" },

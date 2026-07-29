@@ -134,12 +134,23 @@ saidify semantics), so never re-serialize a saidified schema with sorted keys.
 Before declaring done:
 
 ```bash
-source .venv/bin/activate
-python scripts/micro_app_validate.py --input docs/micro-apps/{path}/micro-app-template.json --lint
-python scripts/micro_app_saidify.py --input docs/micro-apps/{path}/micro-app-template.json --verify
+cd ~/code/locksmith-micro-app-designer && PYTHONPATH=src ~/code/keripy/.venv/bin/python \
+  scripts/micro_app_validate.py --input <abs path to micro-app-template.json> --lint
 ```
 
-Both must exit 0.
+```bash
+cd ~/code/locksmith-micro-app-designer && PYTHONPATH=src ~/code/keripy/.venv/bin/python \
+  scripts/micro_app_saidify.py --input <abs path to micro-app-template.json> --verify
+```
+
+Both must exit 0. `micro_app_validate.py` is the gate that reads the **meta-schema**, so it is the
+one that sees a malformed `events` block (Step 5).
+
+**`PYTHONPATH=src` and an explicit interpreter are required.** This repo has no `.venv` and the
+package is not installed, so the previously-documented `source .venv/bin/activate` silently did
+nothing and both scripts died with `ModuleNotFoundError: locksmith_micro_app_designer`. Same shape as
+the concierge invocations below. (The 8 `test_cli.py` failures in this repo's suite have the same
+single cause and are pre-existing; 161 pass without them.)
 
 Then the two concierge-api gates. **Both must exit 0**, and they cover different things — neither
 substitutes for the other.

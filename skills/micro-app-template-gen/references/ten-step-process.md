@@ -209,6 +209,27 @@ the authoring spec pins for exactly this (§6.4):
 - Do **not** confuse it with `event.credential` (Step 6, reactions): that is the
   **inbound** credential that triggered a reaction. Bare `credential` is **outbound**.
 
+### `payload_mapping` satisfies a declared event; it does not define one
+
+Its target is the `payload_schema` you declared for that `event_type` in the aggregate's `events` map
+(Step 5). The mapping's job is to produce a payload conforming to that contract — a rename, a
+discriminator literal, a `credential.said`, a flattening of an inbound ACDC — not to be the place the
+event's shape is decided.
+
+**Write complete, explicit mappings, exactly as the landed bundles do.** Every key spelled out. At
+`micro-app-template/0.2` a mapping will become omissible where each event property binds to a
+same-named field of the trigger context, and present entries will merge over that default — but **no
+tool implements that yet**, so a partial or omitted mapping fails `micro-app check` with
+`uncovered_field` errors today. Declare the `events` block, keep the mappings full.
+
+Two things conform-by-name will never do, so they always need an explicit entry — now and at `0.2`:
+
+- **`credential.said`** (the outbound credential this emission list just issued). A property named
+  `license_said` does *not* auto-resolve to it.
+- **`event.credential.attributes.*`** (the inbound credential that fired a reaction). Binding an
+  inbound ACDC's attribute names implicitly would let a counterparty's schema change silently re-bind
+  your durable log — which is exactly what the reaction-side mapping exists to prevent.
+
 ### Mapping coverage — the check that will reject your template
 
 Every `event.<field>` any fold handler reads must be supplied by some emission's
@@ -231,8 +252,58 @@ Aggregates are typically TEL-backed (when tracking credential lifecycle) or KEL-
 1. **Inception event type** — the event that mints the aggregate's identifier
 2. **State schema** — JSON-Schema for the folded state
 3. **Initial state** — starting value
-4. **Invariants** — forward-ref validation rules
-5. **Log scope** — `private` | `witnessed` | `shared`
+4. **Events** — the declared contract for each event type this log carries (below)
+5. **Invariants** — forward-ref validation rules
+6. **Log scope** — `private` | `witnessed` | `shared`
+
+### Declare your events BEFORE the fold and before the emissions
+
+The event is the durable log record. Roughly two independent consumers read each one — an aggregate
+fold *and* one or two projections — so its shape is a shared contract, not a private input. Declare it
+once, on the aggregate, keyed by event type (authoring spec §6.5):
+
+```json
+"events": {
+  "license_received": {
+    "description": "A license credential was granted to us and admitted.",
+    "payload_schema": {
+      "type": "object",
+      "properties": {
+        "license_said": { "type": "string" },
+        "jurisdiction": { "type": "string" },
+        "effective":    { "type": "string", "format": "date" }
+      },
+      "required": ["license_said", "jurisdiction", "effective"],
+      "additionalProperties": false
+    }
+  }
+}
+```
+
+**Author the contract first, then the mappings that satisfy it.** The old order — write the mappings
+and let the contract be whatever they happened to produce — is why the event shape used to be
+declared once per producer with nothing requiring the producers to agree, and why fields went quietly
+missing: nobody proofreads a restatement.
+
+Four rules the meta-schema enforces, so getting them wrong fails `micro_app_validate.py`:
+
+- **`additionalProperties: false` is required.** A contract that isn't closed isn't a contract.
+- **Never declare `type`, `said`, `seq`, `source_aid` or `datetime`** as payload properties. They come
+  from the event envelope, and the fold engine stamps them *over* the payload — so a payload property
+  with one of those names is silently discarded at fold time. Name yours `license_said`,
+  `attestation_said`, `version_said`, as the corpus does. A handler reading `event.said` gets the
+  envelope's value and needs no producer.
+- **Mark a property `required`** if any fold handler reads it, or if it is named by this aggregate's
+  `boundary.instance_key` or a projection's `primary_key` (routing precedes the handler). Leave
+  genuinely optional fields un-`required` — that is what they are for, instead of an `''` sentinel.
+- **A shared event-type name creates no contract.** If a counterparty's template uses the same event
+  type name, that is a coincidence: the regulator's `license_granted` carries nine properties and the
+  carrier's carries four, and both are correct. Events never cross a template boundary; exchanges do.
+  Cross-role shape agreement belongs on the wire, never on an event name.
+
+**Status:** `events` is **optional** at `micro-app-template/0.1` and becomes **required** at `0.2`.
+Declare it now — it is additive, it cannot break your other gates, and at `0.2` your `payload_mapping`s
+get trimmed mechanically against it.
 
 **Fold-op gotcha (applies to projection folds too, Step 8):** every fold-op field is a **CEL expression string** — including `increment`'s `by`, which must be written `"by": "1"` / `"by": "-1"`, never a bare JSON number. The meta-schema rejects numeric `by` with an opaque "not valid under any of the given schemas" error on the whole handler.
 
