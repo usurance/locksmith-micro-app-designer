@@ -245,6 +245,40 @@ name is the better one — not to reach for a transform, because there isn't one
 A fold handler reads them directly and they need no producer: `event.datetime` rather than a
 `granted_at` property, `event.credential_said` rather than a copied `license_said`.
 
+#### The declared mint
+
+One exception lets a *differently*-named property pull its value from one of the eight
+instead of from the trigger: `"from": "<envelope slot>"` on that property, in its event
+type's `payload_schema` — the same closed eight-name enum above and nothing else. No CEL
+expressions, no renames. The property name **is** the domain name (`application_id`, never
+`credential_said`); `from` only says which envelope slot mints it. The declaration sits on
+the event **type**, once — every producer of that event type mints the same property the
+same way (owner ruling 2026-07-28, register finding 37; authoring spec §6.5).
+
+**Reach for it in exactly one situation:** a stable business key (identifier kind 3) whose
+value is *born* as a credential SAID at one event type, and from then on is carried by
+ordinary command fields at every other event type that needs it — the mint/carry split
+behind a collection projection's `primary_key`.
+
+Worked pair from the corpus: `application_received` declares
+`"application_id": { "type": "string", "from": "credential_said" }` — the mint, the moment
+the credential this event's own emission just admitted becomes the application's domain
+identity. `license_granted`, a later event feeding the same projection, carries
+`application_id` conform-by-name from `command.application_id` instead — the carry.
+`micro-app check` verifies both sides route into one projection.
+
+**Do NOT reach for it when:**
+
+- The value is reachable conform-by-name from the trigger — that's the default, and it
+  needs no declaration at all.
+- It's a timestamp. A fold reads `event.datetime` directly; nothing mints it into a payload
+  property.
+- It's provenance a fold can already read off the envelope. `event.credential_said`,
+  `event.credential_issuer`, `event.credential_edges.<name>` are available to any handler
+  without a producer; `from` exists only to carry one of those values INTO a
+  differently-named domain property that outlives the event that minted it, not to
+  duplicate what a handler can already reach directly.
+
 **Two things that used to be mapping tricks, and where they go now:**
 
 - **A discriminator literal** — one producer writing `kind: 'compliance'` so a shared event

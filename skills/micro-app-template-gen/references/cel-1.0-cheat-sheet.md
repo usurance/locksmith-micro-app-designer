@@ -72,7 +72,11 @@ SAID instead. Don't author one.
   CEL, deliberately) alongside whatever fields the event's `payload_schema`
   declares (e.g. a `license_received` event with payload fields
   `jurisdiction`, `effective` is read as `event.jurisdiction`,
-  `event.effective` — no `.payload.` nesting for the event being folded)
+  `event.effective` — no `.payload.` nesting for the event being folded).
+  Any of these five, plus the credential provenance triple
+  (`credential_said`/`credential_issuer`/`credential_edges`), may also be
+  *minted* into a differently-named payload property via a declared `from`
+  on that property (ten-step-process.md §Step 4, "The declared mint")
 - `event.credential` (reactions on `credential_received` and `lifecycle_event`) — `{ said, type, issuer, holder, attributes, validity, revoked }`
 - `row` — fields of the projection's `row_schema`
 - `attributes` — fields of the credential's `attributes` block

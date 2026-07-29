@@ -74,6 +74,10 @@ Per-step questions to ask an SME. Pick the primary question first; ask follow-up
   genuinely optional? Anything a fold handler reads must be always-present.
 - **Does any event type have more than one producer?** If two triggers would write the same event
   type with a literal telling them apart, those are two event types. Name them separately.
+- **Is any property of this event the *birth* of an identity** — the moment a credential SAID
+  becomes the thing's name? Declare it with `from: credential_said` on that event type. If
+  other events carry the same key from command input afterwards, that is the mint/carry
+  pattern and the checker verifies both sides route one projection.
 - *"Walk each event type this aggregate cares about — for each, what happens to the state? Is it a simple field set/append/remove (an op list), or does it need a full custom reducer (a raw CEL expression)?"* — this builds the `fold` handler map, one entry per event type
 - *"What test vectors prove each fold handler does what you just said? Give me a couple of `(events in) → (state out)` examples per handler."* — `test_vectors`
 - *"What invariants does it protect? (plain English; will become validation rules)"*
