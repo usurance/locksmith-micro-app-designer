@@ -1,6 +1,46 @@
 # Question Bank
 
-Per-step questions to ask an SME. Pick the primary question first; ask follow-ups only when the primary answer leaves ambiguity. One question at a time. Plain language — push back on KERI jargon in user-facing answers.
+Per-step questions to ask an SME. Pick the primary question first; ask follow-ups only when the primary answer leaves ambiguity. One question at a time.
+
+**Ask in business language; think in KERI.** The SME owns the domain, not the protocol — so a question
+that says "targeted", "untargeted", "aggregate", "AID" or "op list" cannot be answered by the person
+you are asking, and an unanswerable question gets a guess. Every KERI decision has a business question
+that reveals it; the table below pairs them. **You** hold the protocol vocabulary and route to the
+protocol skills. The SME never has to.
+
+## The question the whole frame turns on
+
+Ask this before anything else, and ask it again of every fact that comes up:
+
+> ***"Does this need to be provable later, to someone who wasn't there?"***
+>
+> And if yes: ***"Who is that someone, and what will they already know when they check?"***
+
+Almost everything else follows from the answer. A "no" means it stays local — a workspace note, a view,
+a gate — and none of the KERI questions apply to it. A "yes" names a **verifier**, and the verifier is
+what decides whether the fact is a credential, whether it needs an issuee, what may be withheld, and
+what has to be an edge. Most authoring drift starts here: the ten steps otherwise run entirely from the
+*actor's* side — what they hold, what they do, what they see — and never ask who relies on the result.
+
+## KERI decision → what to actually ask
+
+| The decision you are making | Ask the SME | You route to |
+|---|---|---|
+| Is this a credential at all? | *"Does this need to be provable later, to someone who wasn't there?"* | `keri-shape-pass.md` Q1 |
+| Targeted or untargeted | *"When this goes out, is it addressed to one named party who's going to rely on it — or are you publishing a statement anyone might read?"* | `acdc-design`, shape-and-disclosure |
+| Public or private (`u` blinding) | *"If someone learned only that this document exists — not what's in it — would that alone tell them something you'd rather not say?"* | same |
+| Disclosure mode | *"When they show this, do they show the whole thing, or does the other side usually only need one part of it?"* | same |
+| Edge operator | *"Does holding the parent give you the **right to issue** this — or does it just record **where the information came from**?"* | `acdc-design`, edges-and-provenance |
+| Lifecycle spelling (TEL state vs edge) | *"When a new one replaces an old one: does the old one's **standing** change, or do you need to **prove the link** between them? Or both?"* | `keri-shape-pass.md` Q2; ten-step §Step 3 |
+| Registry blinding | *"Should outsiders be able to see when you suspend or revoke one of these — or should even that be invisible to anyone but the holder?"* | `acdc-design`, lifecycle-and-registries |
+| Bulk issuance | *"Will you issue the same thing over and over, where someone seeing the same identifier twice could connect two uses that shouldn't be connected?"* | same |
+| Per-scope granularity | *"If someone has authority in three states, should they be able to prove just the one that's relevant — without revealing the other two?"* | `keri-shape-pass.md` Q4 |
+| Identifier kind | *"Who assigns this number or code — you, or somebody else? And what happens to you if they change how they assign it?"* | `keri-shape-pass.md` Q5; spec §5.7 |
+| Ordering as an edge | *"Is there something that must already have happened before this one is allowed to exist?"* | `keri-shape-pass.md` Q3 |
+| Truth-maker | *"Is this something **you** decide, or something you're **recording that someone else** decided?"* | `keri-shape-pass.md` § truth-maker |
+
+**Notation in this file:** *italic quoted* lines are things to say out loud to the SME. Unquoted bold
+lines are notes to **you**, the author — do not read them aloud; they name the slot the answer lands in.
 
 ## Step 0 — Identify the role
 
@@ -18,7 +58,8 @@ Per-step questions to ask an SME. Pick the primary question first; ask follow-up
 
 **Follow-ups:**
 - *"If two outcomes feel central, can you state each separately? They might be two micro-apps."*
-- *"Does this template descend from another? If so, what's the parent's SAID and version, and what did you change?"*
+- *"Is this a variation on something that already exists? What did you change about it, and why?"* —
+  **you** resolve the parent's SAID and version from the repo; ask only for the intent
 
 ## Step 1.5 — The KERI-shape pass
 
@@ -54,7 +95,9 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
 
 **Follow-ups per imported credential:**
 - *"What's this credential type called?"*
-- *"What's the SAID of the schema?"* — if not known, note as TBD and continue
+- **Find the ACDC schema SAID yourself** — look it up in the counterparty's template or the shared
+  schema pack. Do not ask an SME for a SAID; they have no way to know one. If it does not exist yet, note
+  it as TBD and continue
 - *"Who issues it? (which role)"*
 - *"Which lifecycle states make it usable? (default: active)"*
 - *"Does the role start without an active instance of this credential type? If so, we still declare it here — the imports list captures types, not current holdings. Note the 'starts empty' status in the `narrative` field."*
@@ -68,8 +111,10 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
 - *"What's the credential called and what does it convey?"*
 - *"Who holds it? Who can verify it?"*
 - *"Does it chain from another credential — like 'I can only issue this if I hold a parent credential'? If so, which?"*
-  - *"Is the chain authorizing (holder becomes issuer), referencing (informational only), or via delegated AID?"*
-- *"How sensitive is its data? Full disclosure, selective (per-field), or aggregate?"*
+  - *"Does holding that parent give you the right to issue this one — or does it just record where the information came from?"* → **authorizing** vs **referencing**
+  - *"Could someone act on your behalf here — a deputy or a system you stand behind — using their own signature rather than yours?"* → **via delegate**. Never say "delegated AID" to an SME
+- *"When they show this to someone, do they show all of it — or does the other side usually only need one part of it?"* → full vs selective vs partial disclosure. **Do not offer "aggregate" as a choice**; it is the mechanism for one of these answers, not something an SME can pick. Route the decision to `acdc-design`
+- *"Is it addressed to one named party who'll rely on it, or is it a statement anyone might read?"* → targeted (**credential**) vs untargeted (**attestation**). Ask it this way; the two protocol words are yours, not theirs
 - *"What states does this credential go through?"* — list them
 - *"For each state, how is it reached? Through which workflow? Mapping to KERI: is the transition an `issue` (initial creation), an `update` (mid-life change), or a `revoke` (terminal)?"*
 
@@ -81,17 +126,27 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
 **Follow-ups per command:**
 - *"In imperative voice, what's this command called?"*
 - *"What does the actor supply? (the payload)"*
-- *"What must already be true for this command to be valid?"*
-  - *"What credentials must the actor hold? (auth preconditions)"*
-  - *"What facts must exist in the local state? (state preconditions)"*
-  - *"Any deadlines, cooldowns, business hours? (temporal preconditions)"*
-- *"If the actor retries, what stops a duplicate?"* — nothing to author here: `idempotency_key_expression` was removed from the template spec; the runtime dedups on the exn message's own SAID instead.
-- *"What happens on success? Does it emit an IPEX message? Advance a credential's lifecycle? Append to a local aggregate? All of those?"*
+- *"By what authority is this person allowed to do it — what would they have to be holding for you to
+  accept it?"* — **this answer goes to `authz` (`credential` + `schema_said`, or `aid`/`allowlist`, or
+  `open`), NOT to `auth_preconditions`.** Authority is credential-gated, and expressing it as a CEL
+  predicate is a defect (ten-step §Step 4). Asking "what must be true for this to be valid" invites a
+  permission check, which is the Web-2.0 shape; ask what they **hold**
+- *"What must already be true in your own records for this to make sense?"* → `state_preconditions`
+- *"Any deadlines, cooldowns, business hours?"* → `temporal_preconditions`
+- *"If the actor retries, what stops a duplicate?"* — **nothing to author:** the runtime dedups on the
+  exn message's own SAID.
+- *"When this succeeds, what actually happens? Does something go out to the other party? Does something
+  they hold change status? Does it just get written down on your side? Any combination?"* → the three
+  emission kinds. **Do not say "IPEX" or "aggregate" out loud** — the discipline rule scopes that
+  vocabulary to your own modeling, not to the interview
 
 ## Step 5 — Aggregates
 
 **Primary:**
-- *"What state does this role track locally?"*
+- *"What has to have happened, and been written down, for this role to know whether the next action is
+  allowed?"* — **the log is the record; state is a fold of it.** Do not open with "what state do you
+  track" — that invites a database table, and a table is where a status column comes from (see the two
+  row checks at ten-step §Step 8)
 
 **Follow-ups per aggregate:**
 - *"What history must I read to know if a command is valid?"* — that's the aggregate
@@ -101,11 +156,14 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
   genuinely optional? Anything a fold handler reads must be always-present.
 - **Does any event type have more than one producer?** If two triggers would write the same event
   type with a literal telling them apart, those are two event types. Name them separately.
-- **Is any property of this event the *birth* of an identity** — the moment a credential SAID
-  becomes the thing's name? Declare it with `from: credential_said` on that event type. If
-  other events carry the same key from command input afterwards, that is the mint/carry
-  pattern and the checker verifies both sides route one projection.
-- *"Walk each event type this aggregate cares about — for each, what happens to the state? Is it a simple field set/append/remove (an op list), or does it need a full custom reducer (a raw CEL expression)?"* — this builds the `fold` handler map, one entry per event type
+- Ask: *"Is this the moment the thing gets the name it will be known by from now on?"* — **if yes, that
+  property is the birth of an identity: declare it with `from: credential_said` on that event type.**
+  When later events carry the same key from command input, that is the mint/carry pattern and the
+  checker verifies both sides route one projection.
+- *"Walk each event type — when this happens, what changes in the record you just described?"* — this
+  builds the `fold` handler map, one entry per event type. **Whether that becomes an op list or a raw
+  CEL reducer is yours to decide from their answer, not a question to ask** — an SME cannot choose
+  between an op list and a reducer, and asking makes them guess
 - *"What test vectors prove each fold handler does what you just said? Give me a couple of `(events in) → (state out)` examples per handler."* — `test_vectors`
 - *"What invariants does it protect? (plain English; will become validation rules)"*
 - *"Is this log private, witnessed, or shared with others?"*
@@ -116,9 +174,13 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
 - *"What does this role do when something happens that they didn't initiate?"*
 
 **Follow-ups per reaction:**
-- *"What event are they reacting to? An incoming credential? An exn message? A local lifecycle transition? A scheduled timer?"*
+- *"What event are they reacting to? Something arriving from someone else, a status change on something they hold, or a timer?"*
+- *"Who is allowed to send you this — anyone, specific parties, or only someone holding a particular credential?"* → `authz`, same as a command. **A reaction is externally invocable, so it needs one too** — and the bank used to skip this entirely
 - *"What do they do in response? (same emission shape as commands)"*
-- *"What if the reaction fails? Log and continue? Spurn? Abort?"*
+- *"Is what arrives something you decide, or something you're recording that someone else decided?"* →
+  the truth-maker rule. **You never refuse to record a counterparty's fact**; you record it and evaluate
+  it as-of at read time
+- *"What if the reaction fails? Log and continue? Refuse it? Stop?"* → `log_and_continue` / `log_and_spurn` / `abort`
 
 ## Step 7 — Workflows
 
@@ -142,7 +204,7 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
 - *"Is this a list of rows, or one single summary document?"* — `shape`: `collection` (rows) or `object` (one folded document, no `primary_key`)
 - *"For a `collection` shape: what field (or expression over the event) picks out which row an incoming event updates?"* — `primary_key`
 - *"Do those event streams come from more than one log? If so, what ordering can you rely on — the single-source order, sort by timestamp, or does the fold have to work in any order?"* — `ordering` (`source_seq` | `datetime_said` | `commutative`)
-- *"Walk each event type — for each, does it add/update a row, remove one, or replace the whole document?"* — builds the `fold` handler map, same op-list/raw-reducer duality as an aggregate
+- *"Walk each event type — when this happens, does a new line appear on this view, does an existing one change, or does one drop off?"* — builds the `fold` handler map; **the op-list vs raw-reducer choice is yours**, as with an aggregate
 - *"What test vectors prove each handler does what you just said?"* — `test_vectors`
 - *"What's the output shape? (Locksmith will render this as a table, list, cards, kanban, timeline, or summary)"*
 - *"Who's allowed to see each row? (credential-gated row filter)"*

@@ -39,6 +39,24 @@ say *schema*.
 ordinary JSON-Schema for local slots and are **not** ACDC schemas — measured across the landed corpus,
 they are the *majority* of schema-bearing keys. Write "ACDC schema" whenever you mean the type.
 
+**Four terms are not the whole variant space — they are the part that causes *naming* errors.** Three
+more axes exist, each of which can make "the ACDC" mean something different, and every one is
+`acdc-design`'s decision, not this page's:
+
+| Axis | Why it is a naming hazard | Decided in |
+|---|---|---|
+| **Public / Private / Metadata** (the top-level `u` field) | A **metadata** ACDC (`u = ""`) has a SAID that *differs from the real private ACDC's*. "The ACDC's SAID" is two different values depending on which you meant | `acdc-design`, shape-and-disclosure |
+| **Compact / non-compact** | The same instance, different bytes — sections replaced by their SAIDs. All variants form one hash tree, and the issuer's commitment is on the **most compact** variant's SAID. "The ACDC" may be any node on that tree | same |
+| **Registry state: blinded (`bup`) or visible (`upd`)** | This is the hazard people hit most: *"a blinded credential"* almost always means **a credential whose registry state is blinded** — the blinding is on the TEL state, not on the ACDC | `acdc-design`, lifecycle-and-registries |
+
+Two more that change what an *instance* is, same routing: **`a` vs `A`** (attribute section vs aggregate
+section — mutually exclusive; the aggregate is what makes per-element selective disclosure possible), and
+**bulk issuance**, where one logical grant is many pre-generated instances with distinct SAIDs, so "the
+credential" is a set rather than a thing.
+
+Say which axis you mean, then hand the decision to `acdc-design`. This page only decides whether the
+thing should be an ACDC at all.
+
 ---
 
 ## The load-bearing rule
@@ -108,20 +126,31 @@ correctly points at it.
 **KERI-native shape.** An issued ACDC. The decision *is* the artifact; there is no separate audit
 record to keep in sync with it. Its attributes are what the requirement enumerates.
 
-### Then Q1b — targeted or untargeted?
+### Then Q1b — is there a third option you are skipping?
 
-Answer this, because it is the structural form of the truth-maker rule and it changes the model:
+**The shape the rest of this page was missing.** § *The truth-maker rule* says an artifact you merely
+witness stays observational — and an author reads "observational" as *a local projection column*. There
+is a middle option this page had no name for: if the observation must be **verifiable by someone else**,
+its KERI-native form is an **untargeted attestation** — you author it, you sign it, and nobody can read
+authority out of it. So the answer set is three, not two:
 
-| | Shape | Use when | Consequence |
-|---|---|---|---|
-| **Targeted** — issuee present | a **credential** | you are conferring something *on a named party* — authority, status, a right, a clearance | can be `I2I`-chained: the spec requires the far node of an `I2I` edge to be **Targeted** |
-| **Untargeted** — no issuee | an **attestation** | you are publishing an **observation** — *"to whom it may concern; verifiable authorship only"* | reachable only by `NI2I`. Nobody can derive authority from it, which is the point |
+| If the fact… | Shape |
+|---|---|
+| confers something on a **named party** | a **credential** (targeted) |
+| is an observation **others must be able to check** | an **attestation** (untargeted) |
+| is an observation **nobody outside this role checks** | a local row — stay a mechanic |
 
-**This is the shape the rest of this page was missing.** § *The truth-maker rule* says an artifact you
-merely witness stays observational — but "observational" does not mean "a local projection column."
-If the observation needs to be **verifiable by someone else**, its KERI-native form is an **untargeted
-attestation**: you author it, you sign it, nobody can read authority out of it. A local row is the
-right answer only when nothing outside this role ever needs to check it. Ask which.
+**Ask the SME, not the protocol:** *"Is this addressed to one named party who's going to rely on it, or
+is it a statement anyone might read? And does anyone outside your own team ever need to check it?"* The
+words *targeted* and *untargeted* are yours, not theirs — see `question-bank.md` § "KERI decision →
+what to actually ask".
+
+One consequence worth knowing before you choose: only a **Targeted** far node may bear an `I2I` edge, so
+an attestation is reachable by `NI2I` only — which is the point, but it constrains what can chain to it.
+
+**The decision itself belongs to `acdc-design`** (`references/shape-and-disclosure.md`), which owns
+targeted-vs-untargeted along with blinding and disclosure mode and carries the defaults and worked
+examples. This page's job is to stop you skipping the question — not to answer it. Route.
 
 Note the corpus has **zero** untargeted ACDCs — all six export schemas require `i` — so this branch is
 unexercised here, and `rating_attestation` is *named* attestation while being targeted, i.e. it is a
