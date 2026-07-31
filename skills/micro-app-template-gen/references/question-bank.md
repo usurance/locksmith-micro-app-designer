@@ -27,6 +27,9 @@ what has to be an edge. Most authoring drift starts here: the ten steps otherwis
 | The decision you are making | Ask the SME | You route to |
 |---|---|---|
 | Is this a credential at all? | *"Does this need to be provable later, to someone who wasn't there?"* | `keri-shape-pass.md` Q1 |
+| Which **tier** — nothing / anchor / ACDC | *"Does someone just need to confirm afterwards that this happened and hasn't been altered — or do they need to act on it, knowing it's still in force right now?"* Backward-looking → **anchor** (`log_scope: witnessed`); acting-now → **ACDC** | `keri-shape-pass.md` Q1 tier table |
+| Content-plane custody | *"Where does that document actually live, who keeps it, and what happens if they stop?"* — **ask this every time you anchor.** A SAID proves integrity and gives you no retrieval | same, content-plane note |
+| The workbench crossing | *"What did you produce outside the system, and what exactly should the system commit to? Does that cover what someone would need to re-check — or just a list of what exists?"* | `keri-shape-pass.md` § the workbench |
 | Targeted or untargeted | *"When this goes out, is it addressed to one named party who's going to rely on it — or are you publishing a statement anyone might read?"* | `acdc-design`, shape-and-disclosure |
 | Public or private (`u` blinding) | *"If someone learned only that this document exists — not what's in it — would that alone tell them something you'd rather not say?"* | same |
 | Disclosure mode | *"When they show this, do they show the whole thing, or does the other side usually only need one part of it?"* | same |
@@ -166,7 +169,12 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
   between an op list and a reducer, and asking makes them guess
 - *"What test vectors prove each fold handler does what you just said? Give me a couple of `(events in) → (state out)` examples per handler."* — `test_vectors`
 - *"What invariants does it protect? (plain English; will become validation rules)"*
-- *"Is this log private, witnessed, or shared with others?"*
+- *"Would anyone outside your team ever need to prove, afterwards, that these entries are genuine and
+  weren't edited later — an auditor, a regulator, a court?"* → **`log_scope`.** Yes → `witnessed`
+  (KEL-anchored, and this is the **anchor tier** — it is how you satisfy "audit everything" without
+  making everything a credential). No → `private`. Multi-party log → `shared`. **Do not treat this as a
+  formality**; four of the landed corpus's six aggregates are `witnessed`, and it is the cheapest
+  provability there is
 
 ## Step 6 — Reactions
 

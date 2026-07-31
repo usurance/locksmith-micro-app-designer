@@ -76,6 +76,7 @@ event, when ACDC and KERI already gave the fact unforgeably.
 
 | | Question | The tell, in one line |
 |---|---|---|
+| Q1 | **Which tier** — nothing, anchor, or ACDC? | nobody outside checks it → **workbench**; someone must verify **later** that it happened → **anchor** (`ixn` seal; `log_scope: witnessed`); someone must **act on its current standing** → **ACDC** |
 | Q1 | Is this a credential? | an authority verb; *immutable once …*; *superseded, never deleted*; a row carrying both a decision and a status |
 | Q1b | Targeted or untargeted? | conferring something on a **named party** → a targeted **credential** (and only a Targeted far node can bear an `I2I` edge); publishing an **observation** → an untargeted **attestation**, `NI2I` only |
 | Q2 | Is this a lifecycle? | a `status` field set by a **fold literal**; a `*_superseded`/`*_revoked` event type; two emissions from one trigger writing one projection |

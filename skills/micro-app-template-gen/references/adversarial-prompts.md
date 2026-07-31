@@ -2,7 +2,7 @@
 
 Before declaring a template done, deliberately try to break it. Walk this checklist with the SME. Capture concerns in `metadata.json` `author_intent_notes` so reviewers see them.
 
-**Walk 11–17 first.** Items 1–10 attack a model and ask whether it survives; items 11–17 ask whether
+**Walk 11–18 first.** Items 1–10 attack a model and ask whether it survives; items 11–18 ask whether
 it is the right model. A defect in the shape cannot be found by attacking it — every one of the
 findings that produced this section's checks passed items 1–10 and every automated gate. Reach
 **`keri:chat`** to adjudicate any protocol claim the template's prose makes; it is hosted and can be
@@ -58,7 +58,7 @@ unavailable, in which case use `keri:acdc` / `keri:spec`, which carry the same n
 - *An attacker holds a credential that chains from another via `authorizes`. Can they issue a credential they shouldn't be able to?*
 - Trace the chain depth. Confirm that depth limits or scope constraints in the chain prevent unauthorized escalation. If unsure, document the assumption.
 
-## Shape checks (11–17) — walk these first
+## Shape checks (11–18) — walk these first
 
 Each of these was a shipped defect that passed every other gate. Reference:
 `references/keri-shape-pass.md`.
@@ -128,8 +128,21 @@ Each of these was a shipped defect that passed every other gate. Reference:
   matching, loudly. **Specs are ground truth; when framework canon and the spec disagree, the canon is
   the defect.**
 
+## 18. A commitment whose digest has the wrong scope
+
+- *For every SAID this template commits to that was produced outside the system — a parse run, a
+  manifest, an export — what exactly does that digest cover?* Does it cover the content someone will
+  later need to re-derive, or only a **listing** of it?
+- Register **finding 8**: `index_said` was a SAID over a parser index listing *filenames*, committing to
+  no shard content. It looked like proof and was not. `program_manifest_said`, over the shard map, is
+  the same crossing done right. **A workbench crossing with the wrong scope is worse than none, because
+  it reads as proof.**
+- And: *who stores that content, who serves it, and what happens when they stop?* A SAID proves
+  integrity and gives no retrieval — anchor an unavailable document and you can prove you committed to
+  something and never again prove what.
+
 ## Recording the review
 
 After walking the checklist, add a paragraph to `metadata.json` `author_intent_notes`:
 
-> Adversarial review performed 2026-MM-DD. Walked shape checks 11-17 and adversary checks 1-10. Identified concerns: [list]. Mitigations: [list]. Open risks: [list].
+> Adversarial review performed 2026-MM-DD. Walked shape checks 11-18 and adversary checks 1-10. Identified concerns: [list]. Mitigations: [list]. Open risks: [list].

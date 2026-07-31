@@ -57,6 +57,28 @@ credential" is a set rather than a thing.
 Say which axis you mean, then hand the decision to `acdc-design`. This page only decides whether the
 thing should be an ACDC at all.
 
+### The row analogy — right about the count, wrong about the semantics
+
+"An ACDC is a data container, so of course there are many — you don't say *'that's a lot of rows'* about
+a table" is a **good** instinct, and it is the correct answer to the "that's a lot of credentials"
+objection at Q4. Keep it for that.
+
+Do not keep it for anything else, because "row" smuggles in **mutable update semantics**, and that is
+the precise mechanism behind this corpus's worst finding — a rate program *"modeled as a mutable row
+with a status column."* A row is updated in place; an ACDC is issued once and never changes. Three more
+places it misleads:
+
+| Rows | ACDCs |
+|---|---|
+| updated in place | immutable; a change is a **new ACDC plus a TEL transition** on the old |
+| free — a memory write | every issuance is a TEL event that MUST be anchored in the issuer's KEL, so instances have real cost (bulk issuance exists to amortize it) |
+| live in *your* database | a targeted ACDC lives in the **holder's** wallet; after issuance you can revoke, not edit |
+| `ALTER TABLE` | no analogue — an ACDC schema is immutable, and a change is a new SAID, i.e. a new type |
+
+**The mapping that actually holds: the ACDC is the certificate; the TEL is the row.** Immutable issued
+content on one side, mutable one-per-credential status on the other. Every status-column defect in this
+corpus is row semantics applied to the ACDC instead of to its TEL.
+
 ---
 
 ## The load-bearing rule
@@ -106,6 +128,40 @@ it.
 
 ## Q1 — Is this a credential?
 
+**First, how much protocol does this fact actually need?** There are three tiers, not two, and the
+middle one is the one authors skip. Answering "no, not a credential" does **not** mean "so it stays a
+local row" — that jump is what makes people either over-credential everything or under-protect facts
+that must survive an audit.
+
+| Tier | Mechanism | What it proves | Reach for it when |
+|---|---|---|---|
+| **nothing** | a local row, a note, a view | — | nobody outside this role ever checks it. **This is the workbench** |
+| **anchor** | an `ixn` event carrying a `SealDigest` over the content's digest — or a `SealRoot` over a **Merkle root**, so one anchor covers a whole batch | *"this content existed, unaltered, and **I committed to it**, at this point in my key history"* | someone must be able to verify **later** that this happened. **This is the auditor's tier** |
+| **ACDC** | issuance + ACDC schema + registry | *"this is issued **to you**, conforms to **this type**, chains to **that**, and is **still valid now**"* | someone must **act** on it now, on its current standing |
+
+**The line between the last two is revocability and now-ness.** An anchor is a point-in-time
+commitment you cannot revoke and that carries no status. An ACDC has a TEL, so it has *current
+standing* — plus an issuee, a schema a verifier can check without prior agreement, and edges.
+
+So: **an auditor looks backwards, and anchors suffice.** "Audit everything" means *anchor* everything,
+not *credential* everything — the KEL is already an append-only, witnessed, duplicity-evident audit log,
+and anchoring is what puts your content into it. A counterparty about to *act* on your authority needs
+now-ness, and that is what an ACDC is for.
+
+In this template model the anchor tier is spelled **`log_scope: "witnessed"`** on an aggregate —
+"KEL-anchored, witnessed" — as against `private` (local-only, no witnesses) and `shared` (multi-party).
+Four of the landed corpus's six aggregates already use it. Choose it deliberately; it is not a
+formality at the end of Step 5.
+
+> **The content plane is not the protocol's problem, and this is the part that bites.** A SAID proves
+> integrity; it provides **no retrieval**. Anchoring a digest does not store the bytes anywhere — if the
+> content is lost you can still prove you committed to *something* and can never again prove *what*.
+> Availability, backup and serving are **yours**, and an ecosystem that depends on them must say who
+> guarantees them. (keripy stores KELs/state in `Baser` and TEL events *and credentials* in `Reger`;
+> arbitrary anchored content is in neither — that is an application store by construction, not an
+> oversight.) Whenever you answer "anchor", also answer: **who stores it, who serves it, and what
+> happens when they stop?**
+
 **Ask:** does an authority *issue* this, such that its existence is the fact?
 
 **The tells.** Any of these in the requirement text:
@@ -126,19 +182,21 @@ correctly points at it.
 **KERI-native shape.** An issued ACDC. The decision *is* the artifact; there is no separate audit
 record to keep in sync with it. Its attributes are what the requirement enumerates.
 
-### Then Q1b — is there a third option you are skipping?
+### Then Q1b — if it IS an ACDC: targeted or untargeted?
 
-**The shape the rest of this page was missing.** § *The truth-maker rule* says an artifact you merely
-witness stays observational — and an author reads "observational" as *a local projection column*. There
-is a middle option this page had no name for: if the observation must be **verifiable by someone else**,
-its KERI-native form is an **untargeted attestation** — you author it, you sign it, and nobody can read
-authority out of it. So the answer set is three, not two:
+**Two axes, and keeping them apart matters.** The tier table above answers *how much protocol* — and
+that axis already contains "stay a local row." This question only arises **once the tier is ACDC**, and
+it asks *what kind*:
 
-| If the fact… | Shape |
+| If the ACDC… | Shape |
 |---|---|
 | confers something on a **named party** | a **credential** (targeted) |
-| is an observation **others must be able to check** | an **attestation** (untargeted) |
-| is an observation **nobody outside this role checks** | a local row — stay a mechanic |
+| is a signed statement with **no specific recipient** | an **attestation** (untargeted) |
+
+**Why this branch was missing.** § *The truth-maker rule* says an artifact you merely witness stays
+observational — and an author reads "observational" as *a local row*, skipping both the anchor tier and
+this one. If the observation must be verifiable by others, it is not a row: it is an anchor, or an
+**untargeted attestation** — which you author and sign, and from which nobody can read authority.
 
 **Ask the SME, not the protocol:** *"Is this addressed to one named party who's going to rely on it, or
 is it a statement anyone might read? And does anyone outside your own team ever need to check it?"* The
@@ -385,6 +443,32 @@ Two corollaries, both observed in the corpus, both worth checking by name:
 
 ---
 
+## The workbench, and the one thing that crosses it
+
+The "nothing" tier has a name: it is **the workbench** — everything a person or a tool does beside the
+framework that the protocol never witnesses. Drafting and editing the spreadsheet, running the parser,
+an embedded LLM helping the author, the modelling that produces a number. None of it is a defect and
+none of it belongs in the template. The test is the same one that opens this page: *does this need to
+be provable later, to someone who wasn't there?*
+
+**But the boundary is not a wall — it is a membrane, and exactly one thing crosses it: a SAID over the
+workbench's output.** The actuary's case states it cleanly: *creating and editing* the rate spreadsheet
+is workbench; *declaring "these are the approved rates"* is protocol. What actually moves across is a
+digest of the content the declaration is about.
+
+So whenever the answer is "workbench", ask the follow-up:
+
+> **"What did the workbench produce, and what exactly does the protocol commit to? Does that digest
+> cover the content someone will later need to re-derive — or only a listing of it?"**
+
+That second clause is the recurring defect, and this corpus has already paid for it: **register finding
+8** — `index_said` was a SAID over the parser's `index.json`, which lists *filenames* and commits to no
+shard content. A commitment that looked right and proved nothing. `program_manifest_said`, a SAID over
+the shard map, is the same boundary done correctly. **A workbench crossing whose digest has the wrong
+scope is worse than no crossing at all, because it reads as proof.**
+
+And per the tier note above: committing to a digest does not store the content. Say who keeps it.
+
 ## The counter-test — what legitimately stays a template mechanic
 
 Q1–Q5 are diagnostic. If you answer "yes" to all five on every fact, you have built a credential
@@ -392,7 +476,7 @@ registry, not a micro-app. These stay exactly where they are:
 
 | Stays a mechanic | Why |
 |---|---|
-| **Local workspace state** — drafts, notes, sort order, a kanban lane, "seen" flags | No issuer, no counterparty, nothing to prove to anyone who was not there |
+| **Local workspace state** — drafts, notes, sort order, a kanban lane, "seen" flags | No issuer, no counterparty, nothing to prove to anyone who was not there. **This is the workbench** — see above for the one thing that crosses |
 | **Derived projections** — counts, totals, filters, "days until", a sort | Recomputable from the log at read time. *Freezing* one is the bug; deriving it is the design |
 | **Pure gates** — a `state_precondition` over this role's own state | `no_active_license_for_jurisdiction` reads your own aggregate. Nobody else needs to verify it |
 | **Counterparty facts you observe** | Observational by the truth-maker rule — record, evaluate as-of, never refuse |
