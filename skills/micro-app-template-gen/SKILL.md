@@ -110,6 +110,8 @@ Plus:
 - ❌ Skipping Step 9 (rules) — most contractual and enforcement substance lives there
 - ❌ Skipping the adversarial review — the highest-value step
 - ❌ Skipping the KERI-shape pass — the step that decides whether the other ten are modeling the right objects
+- ❌ Saying "ACDC" when you mean the **ACDC schema** (the type) or vice versa — and calling an *untargeted* ACDC a credential. Four words, authoring spec §4: **ACDC** = the instance; **ACDC schema** = the type (`s` *is* the type field); **credential** = targeted (has an issuee); **attestation** = untargeted. "One credential per scope" means many instances of ONE schema, never a schema per scope
+- ❌ Writing bare "schema" for an ACDC schema — `payload_schema`, `row_schema` and `state_schema` are ordinary JSON-Schema for local slots and are the *majority* of schema-bearing keys in this model
 - ❌ Modeling a credential's supersession as a **domain event** — it is a TEL state change (or a `supersedes` edge); pick one spelling and record it
 - ❌ A **status column set by a fold literal** — which event arrived is not a lifecycle; the lifecycle is the credential's TEL state and "current" is a dated query
 - ❌ A **parser- or human-minted string as the identity** of an issued artifact — a foreign coordinate (identifier kind 4) is provenance, never the key

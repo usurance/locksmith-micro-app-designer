@@ -17,6 +17,30 @@ which shape you chose *and that you chose it*.
 
 ---
 
+## Say which thing you mean (four words, and this page uses them strictly)
+
+"ACDC" is used in the wild for both the type and the instance, and the confusion produces real
+modeling errors — including one in an earlier draft of this page. Authoring spec §4 carries the
+definitions; the short form:
+
+| Term | Means |
+|---|---|
+| **ACDC** | the **instance** — one issued container. The spec's own bare usage |
+| **ACDC schema** | the **type**. Under *type-is-schema* the `s` field **is** the type field, so the schema SAID is simultaneously the type identity and the immutable validation rules |
+| **credential** | a **targeted** ACDC — one with an issuee (`i` in the attribute block): *"issued by Issuer and issued to Issuee"* |
+| **attestation** | an **untargeted** ACDC — no issuee: *"to whom it may concern; verifiable authorship only."* **Not a credential** |
+
+**The trap this page nearly walked into:** "one credential per scope" means **many instances of one
+ACDC schema** — never one schema per scope. Fifty jurisdictions is fifty issued credentials from one
+`state_authorization` schema, not fifty schemas. When you write about granularity, say *instances* or
+say *schema*.
+
+**And bare "schema" is overloaded in this model.** `payload_schema`, `row_schema`, `state_schema` are
+ordinary JSON-Schema for local slots and are **not** ACDC schemas — measured across the landed corpus,
+they are the *majority* of schema-bearing keys. Write "ACDC schema" whenever you mean the type.
+
+---
+
 ## The load-bearing rule
 
 > **ACDC enforces constraints over existence and identity. It cannot enforce constraints over values
@@ -81,8 +105,27 @@ table.
 is a reference to a decision, not a record of one — the decision already is a credential, and this row
 correctly points at it.
 
-**KERI-native shape.** An issued credential. The decision *is* the artifact; there is no separate
-audit record to keep in sync with it. Its attributes are what the requirement enumerates.
+**KERI-native shape.** An issued ACDC. The decision *is* the artifact; there is no separate audit
+record to keep in sync with it. Its attributes are what the requirement enumerates.
+
+### Then Q1b — targeted or untargeted?
+
+Answer this, because it is the structural form of the truth-maker rule and it changes the model:
+
+| | Shape | Use when | Consequence |
+|---|---|---|---|
+| **Targeted** — issuee present | a **credential** | you are conferring something *on a named party* — authority, status, a right, a clearance | can be `I2I`-chained: the spec requires the far node of an `I2I` edge to be **Targeted** |
+| **Untargeted** — no issuee | an **attestation** | you are publishing an **observation** — *"to whom it may concern; verifiable authorship only"* | reachable only by `NI2I`. Nobody can derive authority from it, which is the point |
+
+**This is the shape the rest of this page was missing.** § *The truth-maker rule* says an artifact you
+merely witness stays observational — but "observational" does not mean "a local projection column."
+If the observation needs to be **verifiable by someone else**, its KERI-native form is an **untargeted
+attestation**: you author it, you sign it, nobody can read authority out of it. A local row is the
+right answer only when nothing outside this role ever needs to check it. Ask which.
+
+Note the corpus has **zero** untargeted ACDCs — all six export schemas require `i` — so this branch is
+unexercised here, and `rating_attestation` is *named* attestation while being targeted, i.e. it is a
+credential. Read that as a gap to be careful about, not as precedent.
 
 **Corpus, right:** `carrier_license` — the regulator's grant is the credential, with a four-state
 lifecycle and all three TEL primitives.
@@ -177,6 +220,11 @@ representation. Two independent mechanisms carry it: the *required* part is your
 (an ACDC lacking the edge label fails step 2, its own schema); the *non-dangling* part is step 1.
 The boolean then has nothing left to say and gets deleted, not repaired.
 
+**And the ordering can't be gamed, for free.** `n` is a *hash* of the far node, so X must already exist
+and be hashed before Y can commit to it. A cycle is unconstructable and the direction of the edge *is*
+the direction of time — you get acyclicity from content-addressing, with no rule to write and nothing
+to check. This is why "ordering is an edge" is safe rather than merely convenient.
+
 **Corpus, wrong:** `governance_sealed_before_freeze`, computed `size(state.sealed_governance) > 0` at
 observation time and carried in the event payload so a collection projection could read it. Note it
 was also **lying about its own claim**: the expression asserts *"some seal exists on this desk right
@@ -201,13 +249,23 @@ recomputed**. See *The truth-maker rule*.
 - an expression testing membership in it to gate admissibility:
   `state.<list>.exists(m, m == event.credential.attributes.<x>)`, `.contains(…)`, `in`.
 
-**KERI-native shape.** **An edge targets a credential** — the ACDC spec's Edge block requires `n` to
-be the far node's ACDC SAID — **not an array element.** So while the authorization lives in an array,
-the chain has nothing to discriminate against and you are forced to check the value yourself, which
-is precisely what `validate_edge` cannot do for you. Change the granularity: **one credential per
-authorized scope.** The inbound artifact then carries an `NI2I` edge to *that scope's* credential, and
-an artifact for an unauthorized scope has no edge target — step 1, plain `NI2I`, no authority in the
-edge.
+**KERI-native shape.** **An edge targets an ACDC** — the spec's Edge block requires `n` to be the far
+node's ACDC **SAID** — **not an array element.** So while the authorization lives in an array, the
+chain has nothing to discriminate against and you are forced to check the value yourself, which is
+precisely what `validate_edge` cannot do for you. Change the granularity: **one issued credential per
+authorized scope — many instances of ONE ACDC schema.** Fifty jurisdictions is fifty issued
+credentials from one `state_authorization` schema, *not* fifty schemas; if you find yourself minting a
+schema per scope, you have read this the wrong way round. The inbound artifact then carries an `NI2I`
+edge to *that scope's* credential, and an artifact for an unauthorized scope has no edge target —
+step 1, plain `NI2I`, no authority in the edge.
+
+**The objection to expect, and the spec's answer.** An SME will say *"that's a lot of credentials."*
+It is, and the spec treats that as the **first** privacy mechanism rather than a cost: disclosure
+tier 1 is **ACDC chaining** — *"decompose bundled credentials into a graph of separately disclosable
+ACDCs."* Splitting `states[]` into per-scope credentials means the holder can disclose authority for
+Utah without revealing that they also hold Nevada. The bundled array cannot do that at any price. So
+the granularity change buys unforgeable discrimination **and** disclosure granularity; it is not a tax
+paid for the former.
 
 **Corpus, wrong:** `in_mandate`, computed
 `state.mandate_states.exists(m, m == event.credential.attributes.state)`. The mandate's authorized
@@ -357,9 +415,28 @@ already eliminated survived in the contract, with no requirement behind it. It w
 2026-07-31. The failure mode is not SME-specific: it is what happens whenever anyone authors in this
 space without checking an assumption against the protocol.
 
-**Reachability caveat:** `keri:chat` is a hosted service and can be unavailable (it returned
-`INTERNAL_ERROR` throughout the session that produced this pass). The fallback is the `keri:acdc` and
-`keri:spec` reference files, which carry the same normative text locally.
+**Reachability caveat:** `keri:chat` is a hosted service and is intermittent (it returned
+`INTERNAL_ERROR` for a whole session, then answered some questions and not others in the next). The
+fallback is the `keri:acdc` and `keri:spec` reference files, which carry the same normative text
+locally.
+
+**A second caveat about `keri:chat`, which matters more than availability: it does not distinguish
+spec from tutorial.** Its corpus mixes `acdc-specification.html` and `keri-specification.html` with
+training and glossary material, and it cites them interchangeably. Concretely, asked about issuance it
+described *"a TEL issuance (`iss`) event"* three times — but the ACDC spec's registry ilks are **`rip`**
+(registry inception), **`bup`** (blindable update) and **`upd`** (update). `iss`/`rev` are keripy/vLEI
+implementation vocabulary. The answer was right; the vocabulary was one layer down from the spec. Use
+chat to *find* the normative sentence, then read it.
+
+**Two protocol facts worth knowing before you lean on IPEX.** First, **the ACDC spec's IPEX section is
+explicitly non-normative** — a baseline for ecosystem-specific protocols, which is exactly why this
+framework reserves `/ipex/*` and defines its own exchange semantics on top. Do not cite IPEX as
+settled protocol. Second, **IPEX does not issue.** Issuance is the anchor — an issuance seal in the
+issuer's KEL directly, or a TEL event anchored there — and it is a unilateral issuer-local act. The
+ACDC's SAID exists at that moment, before any message goes out; a `grant` *transmits* an
+already-issued ACDC and `admit` is the recipient's non-repudiable commitment back. Consequence for
+modeling: a self-issued ACDC that is never disclosed to anyone needs **no IPEX at all**, and a
+lifecycle transition is likewise an anchoring act rather than an exchange.
 
 ---
 

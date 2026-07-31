@@ -77,6 +77,7 @@ event, when ACDC and KERI already gave the fact unforgeably.
 | | Question | The tell, in one line |
 |---|---|---|
 | Q1 | Is this a credential? | an authority verb; *immutable once …*; *superseded, never deleted*; a row carrying both a decision and a status |
+| Q1b | Targeted or untargeted? | conferring something on a **named party** → a targeted **credential** (and only a Targeted far node can bear an `I2I` edge); publishing an **observation** → an untargeted **attestation**, `NI2I` only |
 | Q2 | Is this a lifecycle? | a `status` field set by a **fold literal**; a `*_superseded`/`*_revoked` event type; two emissions from one trigger writing one projection |
 | Q3 | Is this an ordering fact? | a **boolean** named `*_before_*`, `already_*`, `pre_*`; or derived `size(state.x) > 0` |
 | Q4 | Is this discrimination against an array element? | a membership test (`exists`, `contains`, `in`) over an **array attribute**, gating admissibility |
@@ -492,7 +493,13 @@ For each:
 
 The exchange palette across steps:
 
-- IPEX credential exchange — kind: credential, verb: one of six (apply/offer/agree/grant/admit/spurn)
+- IPEX credential exchange — kind: credential, verb: one of six (apply/offer/agree/grant/admit/spurn).
+  **Three of the six are initiating** — `apply` (disclosee-driven), `offer` and `grant`
+  (discloser-driven) — and `spurn` rejects at **any** stage, so every awaiting step needs a refusal
+  path (adversarial check 5). `grant → admit` is a legal two-message exchange; the full
+  `apply → offer → agree → grant → admit` is the negotiated path. Note also that **IPEX carries an
+  already-issued ACDC** — issuance is the anchor in the issuer's KEL/TEL and happens before the first
+  message — so an exchange step is transmission, never the act of issuing
 - exn message — kind: message, pattern: command|query|notification, route
 - Internal step — exchange: null
 
