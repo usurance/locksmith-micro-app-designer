@@ -20,6 +20,33 @@ Per-step questions to ask an SME. Pick the primary question first; ask follow-up
 - *"If two outcomes feel central, can you state each separately? They might be two micro-apps."*
 - *"Does this template descend from another? If so, what's the parent's SAID and version, and what did you change?"*
 
+## Step 1.5 — The KERI-shape pass
+
+Ask these **before** Step 2's "what credentials," because Step 2 and Step 3 presuppose the set. Full
+guidance and the counter-test: `references/keri-shape-pass.md`.
+
+**Primary:**
+- *"Walk me through the requirement one statement at a time. For each one: does this need to be
+  provable later, to someone who wasn't there?"* — if no, it stays a template mechanic and the rest of
+  these questions do not apply to it.
+
+**Follow-ups per statement that does:**
+- *"Who issues this, and is its existence the fact?"* — Q1, a credential. Listen for *issued, granted,
+  approved, filed, certified, attested*; *immutable once …*; *superseded, never deleted*; *corrected
+  forward*; *identified by a number that outlives us*; *who decided, when, on what basis*.
+- *"Does this thing's standing change over time, and who changes it?"* — Q2, a lifecycle. Then: *"TEL
+  state or a `supersedes` edge? Which does the rest of the corpus use?"* Record the answer.
+- *"Does this say one thing must happen before another?"* — Q3, an edge. *"Which artifact commits to
+  which?"*
+- *"Only certain parties or scopes may do this — where does that list live?"* — Q4. If the answer is a
+  list inside one credential, the chain cannot discriminate: *"could each scope be its own credential?"*
+- *"For each identifier here: who mints this value, and who controls its lifecycle?"* — Q5. A
+  hand-keyed, console-supplied, parsed, or concatenated value is provenance, not a key. Name the kind
+  from authoring spec §5.7.
+- *"Is this a fact you author, or one you observe someone else doing?"* — the truth-maker rule. Observed
+  facts are recorded and evaluated as-of; you never refuse to record them.
+- *"Who or what reads this, and when?"* — ask it of every derived value. No consumer means no field.
+
 ## Step 2 — Credential imports (the imports list)
 
 **Primary:**

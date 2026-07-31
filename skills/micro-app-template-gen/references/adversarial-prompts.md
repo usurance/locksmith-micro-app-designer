@@ -2,6 +2,12 @@
 
 Before declaring a template done, deliberately try to break it. Walk this checklist with the SME. Capture concerns in `metadata.json` `author_intent_notes` so reviewers see them.
 
+**Walk 11–17 first.** Items 1–10 attack a model and ask whether it survives; items 11–17 ask whether
+it is the right model. A defect in the shape cannot be found by attacking it — every one of the
+findings that produced this section's checks passed items 1–10 and every automated gate. Reach
+**`keri:chat`** to adjudicate any protocol claim the template's prose makes; it is hosted and can be
+unavailable, in which case use `keri:acdc` / `keri:spec`, which carry the same normative text locally.
+
 ## 1. Impersonation
 
 - *Can an impostor present a forged credential and have it pass auth_preconditions?*
@@ -52,8 +58,78 @@ Before declaring a template done, deliberately try to break it. Walk this checkl
 - *An attacker holds a credential that chains from another via `authorizes`. Can they issue a credential they shouldn't be able to?*
 - Trace the chain depth. Confirm that depth limits or scope constraints in the chain prevent unauthorized escalation. If unsure, document the assumption.
 
+## Shape checks (11–17) — walk these first
+
+Each of these was a shipped defect that passed every other gate. Reference:
+`references/keri-shape-pass.md`.
+
+## 11. Supersession spelled as a domain event
+
+- *Does any event type name a state transition of a thing rather than an act someone took —
+  `*_superseded`, `*_revoked`, `*_suspended`, `*_expired`, `*_reinstated`?*
+- A credential's own lifecycle is a **TEL state change** (or a `supersedes` edge for verifiable
+  lineage). A domain event needs a second emission and a TEL does not — and two emissions from one
+  trigger context conform-bind the same routing key, so the second lands on the first's row.
+- Then: *is the spelling recorded in `metadata.json`, and does it match what the rest of the corpus
+  uses?* This corpus carries three spellings; only the domain event produced a blocker.
+
+## 12. A status column set by a fold literal
+
+- *Is any `status` / `state` / `disposition` field assigned a string literal by a fold handler?*
+- Then status is a function of which event arrived. For an issued artifact, standing is its TEL state
+  and "current" is a **dated query** — derived, never stamped. Check the converse too: *does the
+  projection hold the facts its own claim depends on?* One shipped vector reported a program effective
+  two months in the future as live, because `effective_date` and the approval appeared in zero
+  predicates.
+
+## 13. A parser- or human-minted string as identity
+
+- *For every identifier in this template, name its kind* (authoring spec §5.7). *Which values are
+  hand-keyed, console-supplied, parsed out of a file, or concatenated from other fields?*
+- A foreign coordinate (kind 4) is **provenance, never the key** and never authority. If you already
+  mint a SAID over the thing's content, that is the identity. Also flag any `required` string with **no
+  `pattern`** sitting beside a patterned sibling — its blank value is a silent no-op and its typo
+  matches no row.
+
+## 14. A boolean asserting an ordering
+
+- *Is any boolean named `*_before_*`, `already_*`, `pre_*`/`post_*`, `*_yet` — or derived from
+  `size(state.x) > 0` or an `exists` over state?*
+- Ordering in KERI is an **edge**. A required edge from the later artifact to the earlier one makes the
+  bad state unconstructable — you cannot form the credential without committing to the far node's SAID,
+  and a dangling commitment fails `validate_edge` step 1. Then ask the harder question: *does the
+  boolean's name claim more than its expression checks?*
+
+## 15. An array attribute standing in for per-scope authorization
+
+- *Does any admissibility or authorization check test membership in an array attribute —
+  `exists(m, m == …)`, `contains`, `in`?*
+- **An edge targets a credential, not an array element**, so the chain has nothing to discriminate
+  against and you are forced to compare values, which `validate_edge` cannot do. One credential per
+  authorized scope, `NI2I`, and the unauthorized case has no edge target. Ask also: *can the current
+  shape express adding one scope, or exiting one scope while keeping the others?*
+
+## 16. A derived flag frozen at ingest, or with no consumer
+
+- *Is any derived value written once on upsert and never recomputed?* If the fact is an observation of
+  someone else's artifact, it must be a **read-time as-of evaluation** — scopes move after issuance.
+- *Which rule, precondition, invariant, `row_filter`, or notification reads this field?* If the answer
+  is "none, but a human can see the column," it is decoration, and stale decoration at that. If the
+  prose says a person must be alerted, **route it somewhere**.
+
+## 17. Defending against a hazard the protocol eliminates
+
+- *Does any rule, prose, or contract text in this template guard a threat that KERI/ACDC already
+  removes?* Check each claim against the spec rather than against the framework's own docs.
+- Worked case: the authoring spec once forbade conform-by-name from reaching an inbound ACDC's
+  attributes, on the grounds that a counterparty's schema change could silently re-bind this role's
+  log. ACDC requires a schema `$id` to be a bare SAID and the schema to be immutable, and every import
+  pins `expected_schema_said` — so a changed schema **is a different SAID** and the import stops
+  matching, loudly. **Specs are ground truth; when framework canon and the spec disagree, the canon is
+  the defect.**
+
 ## Recording the review
 
 After walking the checklist, add a paragraph to `metadata.json` `author_intent_notes`:
 
-> Adversarial review performed 2026-MM-DD. Walked checklist items 1-10. Identified concerns: [list]. Mitigations: [list]. Open risks: [list].
+> Adversarial review performed 2026-MM-DD. Walked shape checks 11-17 and adversary checks 1-10. Identified concerns: [list]. Mitigations: [list]. Open risks: [list].

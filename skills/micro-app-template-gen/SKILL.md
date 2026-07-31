@@ -43,6 +43,7 @@ The 10-step process is **rigid in order**. Step N's questions depend on Step N-1
 |---|---|---|
 | 0 | Identify the role | `references/ten-step-process.md` §Step 0; `references/question-bank.md` §Step 0 |
 | 1 | Name the use case (pivotal event) | §Step 1 |
+| **1.5** | **KERI-shape pass** — convert requirement verbs into KERI primitives *before* choosing mechanics | **`references/keri-shape-pass.md`** — mandatory; re-entered by the back-edge |
 | 2 | Credential imports (the imports list) | §Step 2 |
 | 3 | Credential exports (the exports list) | §Step 3 — heaviest step; produces schemas/*.json files |
 | 4 | Commands | §Step 4 |
@@ -66,6 +67,7 @@ Plus:
 
 | File | Purpose |
 |---|---|
+| `references/keri-shape-pass.md` | **Step 1.5.** The five diagnostic questions (credential? lifecycle? ordering fact? array-element discrimination? identity?), the existence-vs-value rule with `validate_edge` quoted, the truth-maker rule, the counter-test for what stays a mechanic, the back-edge, and the `keri:*` routing table |
 | `references/ten-step-process.md` | Detailed prose for each step — rationale, field mappings, anti-patterns |
 | `references/question-bank.md` | Primary + follow-up questions to ask per step |
 | `references/adversarial-prompts.md` | Pre-save adversarial review checklist |
@@ -74,14 +76,30 @@ Plus:
 | `references/naming-conventions.md` | Recommended naming for credentials, roles, workflows, routes |
 | `references/skeleton.json` | Copyable starting template (minimal-valid with REPLACE-ME fields) |
 | `references/examples/` | Worked examples (one per ecosystem domain, when available) |
-| the `acdc-design` skill | Credential-type design decisions consumed at Step 3 (targeted/untargeted, `u`/blinding, disclosure, edges, registry, versioning, governance) |
+| the `acdc-design` skill | Credential-type design decisions consumed at Step 3 (targeted/untargeted, `u`/blinding, disclosure, edges, registry, versioning, governance). Step 1.5 decides *whether* there is a credential; this decides *what it looks like* |
+| the `keri:acdc` skill | Edge operators and `validate_edge`, TEL registry patterns and `ts` state sets, disclosure — reached at Steps 1.5, 2–3 and 5–6 |
+| the `keri:spec` skill | KEL anchoring, ordering, key state — reached at Steps 5–6 where a fold or workflow relies on them |
+| the `keri:chat` skill | Adjudicates a protocol claim the template's prose makes; reached at adversarial review. Hosted, so it can be unavailable — fall back to the two reference skills above, which carry the same normative text locally |
 
 ## Discipline (rigid)
 
 - **Walk steps in order.** No skipping. Step N's answers depend on Step N-1's.
 - **One question at a time.** Don't batch.
 - **Save after each step.** Never lose progress.
-- **Plain language.** Push back on KERI jargon (AID, IPEX) in user-facing fields. Use spec vocabulary (Roles, Credentials, Workflows).
+- **Run the KERI-shape pass before Step 2, and record its five answers.** `references/keri-shape-pass.md`.
+- **Existence over values.** ACDC enforces constraints over existence and identity; it cannot enforce
+  constraints over values inside a thing. When a requirement states a constraint, convert it into an
+  existence constraint wherever the domain allows — usually by changing an object's granularity, not
+  by adding a field. `validate_edge` never compares a near-node attribute against a far-node one.
+- **The back-edge.** If a command, reaction, or projection needs a value the trigger cannot supply,
+  **do not add a field — return to the shape pass, then to Step 3.** The default resolution is that
+  the credential is the wrong shape or the wrong granularity. Making the names agree and declaring a
+  mint (§6.5 `from`) are the only other legal moves, and neither can supply a value derived from
+  state.
+- **Plain language in user-facing fields** — names, descriptions, display strings: push back on KERI
+  jargon (AID, IPEX) there, and use spec vocabulary (Roles, Credentials, Workflows). **KERI
+  vocabulary is required when choosing the model** — see the KERI-shape pass. Keeping the jargon out
+  of the UI is not a reason to keep the primitives out of the design.
 - **Resolve every forward reference.** Step 9 walks all rule_refs surfaced in Steps 3-8; nothing dangles.
 - **Run validation before declaring done.** `scripts/micro_app_validate.py` must pass.
 - **Saidify before committing.** `scripts/micro_app_saidify.py --in-place` stamps the `d` field.
@@ -91,6 +109,15 @@ Plus:
 - ❌ Authoring two roles in one template — split into two
 - ❌ Skipping Step 9 (rules) — most contractual and enforcement substance lives there
 - ❌ Skipping the adversarial review — the highest-value step
+- ❌ Skipping the KERI-shape pass — the step that decides whether the other ten are modeling the right objects
+- ❌ Modeling a credential's supersession as a **domain event** — it is a TEL state change (or a `supersedes` edge); pick one spelling and record it
+- ❌ A **status column set by a fold literal** — which event arrived is not a lifecycle; the lifecycle is the credential's TEL state and "current" is a dated query
+- ❌ A **parser- or human-minted string as the identity** of an issued artifact — a foreign coordinate (identifier kind 4) is provenance, never the key
+- ❌ A **boolean asserting an ordering** an edge could enforce — `*_before_*`, `already_*`, `size(state.x) > 0`
+- ❌ An **array attribute standing in for per-scope authorization** — an edge targets a credential, not an array element, so the chain has nothing to discriminate against
+- ❌ A **derived flag frozen at ingest** — written once on upsert, never recomputed; if it is an observation it is a read-time as-of evaluation
+- ❌ A **flag with no consumer** — no rule, precondition, invariant, filter or notification reads it. If prose says a human must see it, route it somewhere
+- ❌ **Defending against a hazard the protocol already eliminates** — verify the claim against the spec (`keri:acdc` / `keri:spec`); when canon and spec disagree, the canon is the defect
 - ❌ Inventing schema SAIDs — they must be content-addressed
 - ❌ Re-serializing a saidified schema with sorted keys — the `$id` binds to the file's key order
 - ❌ Shipping a schema without a `version` field ("major.minor.patch") — the linter rejects it (ACDC Schema Versioning MUST)

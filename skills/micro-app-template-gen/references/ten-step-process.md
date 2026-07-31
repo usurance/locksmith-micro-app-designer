@@ -61,6 +61,38 @@ Let the SME override defaults. The flags are deployment-readiness *expectations*
 
 **Save:** Write `header` and `role` fields. The template is now structurally minimal-valid (other primitives are empty arrays).
 
+## Step 1.5 — The KERI-shape pass
+
+**Goal:** convert the requirement's verbs into KERI primitives *before* any mechanics are chosen.
+
+**Why here:** Step 2 asks "what credentials must this role hold" and Step 3 asks "what credentials
+does this role produce" — both **presuppose the set**. Nothing before them asks whether a given
+requirement is describing a credential, a lifecycle, an edge, or an identity at all. Three templates
+in this corpus, authored at different times through these ten steps, converged on the same class of
+mistake for that reason: a requirement's sentence became a boolean, a status column, or a domain
+event, when ACDC and KERI already gave the fact unforgeably.
+
+**Walk `references/keri-shape-pass.md`.** Five questions, each with an observable tell:
+
+| | Question | The tell, in one line |
+|---|---|---|
+| Q1 | Is this a credential? | an authority verb; *immutable once …*; *superseded, never deleted*; a row carrying both a decision and a status |
+| Q2 | Is this a lifecycle? | a `status` field set by a **fold literal**; a `*_superseded`/`*_revoked` event type; two emissions from one trigger writing one projection |
+| Q3 | Is this an ordering fact? | a **boolean** named `*_before_*`, `already_*`, `pre_*`; or derived `size(state.x) > 0` |
+| Q4 | Is this discrimination against an array element? | a membership test (`exists`, `contains`, `in`) over an **array attribute**, gating admissibility |
+| Q5 | Is this identity? | a hand-keyed, console-supplied, parsed, or concatenated value used as a key — cross-reference authoring spec §5.7's six identifier kinds and **name the kind** |
+
+It is **diagnostic, not prescriptive.** The reference's counter-test lists what legitimately stays a
+template mechanic (local workspace state, derived projections, pure gates, observed counterparty
+facts), and its truth-maker rule marks where structural impossibility stops: *you may refuse to
+construct only what you are the truth-maker for.*
+
+**Save:** the five answers, one line each, into `metadata.json` — `convention_compliance` (an open
+string→string map) or `author_intent_notes`. The lifecycle spelling in particular must be recorded,
+because a corpus can otherwise end up spelling supersession three ways, as this one does.
+
+**This step is re-entered.** See §The back-edge in the reference, and the note at Step 4.
+
 ## Step 2 — Credential imports (the imports list)
 
 **Goal:** Identify the credentials this role must hold for its commands to be authorized.
@@ -95,6 +127,12 @@ Let the SME override defaults. The flags are deployment-readiness *expectations*
 > decisions for this credential (targeted/untargeted, public/private `u`, disclosure
 > mode, edges, registry, versioning, governance) using the **`acdc-design`** skill.
 > This step then serializes those decisions into the envelope below.
+>
+> **And check the set itself.** Step 1.5 decides *whether* a fact is a credential; `acdc-design`
+> decides *what the credential looks like*. If you arrived here without running the shape pass, the
+> exports list is whatever the requirement's nouns happened to be. Run it. Reach **`keri:acdc`** for
+> edge operators, `validate_edge` semantics, and TEL registry patterns — this is where the
+> existence-vs-value distinction and the lifecycle spelling get settled.
 
 **The most substantial step.** Each exported credential has six layers (per spec §6.3).
 
@@ -120,7 +158,27 @@ For each exported credential, walk:
 - `update` — TEL update event (intermediate state change, e.g., active → suspended)
 - `revoke` — TEL revocation event
 
-The state machine layered on top can have any names; transitions map each to one of these three TEL primitives.
+The state machine layered on top can have any names; transitions map each to one of these three TEL
+primitives. A TEL's `ts` **MUST be a string from a finite set of state values** (ACDC, `upd` field
+constraints), which is exactly what your `states` list is — `issued`/`revoked` are the spec's *common*
+CESR encodings, not the whole permitted set.
+
+### One spelling per concept — decide it here, record it in `metadata.json`
+
+**A credential's own lifecycle has two legitimate spellings and one wrong one.** Choose, and write the
+choice down; otherwise a corpus ends up with all three, as this one has:
+
+| Spelling | Use when | Corpus |
+|---|---|---|
+| **TEL state** (`issued → superseded`, `tel_primitive: update`) | the issuer's act changes the thing's standing | `rating_attestation` ✅ |
+| **A `supersedes` edge** (self-referential, `operator: references` / NI2I) | the *lineage link* itself must be verifiable, not just the standing | `product_definition_version` ✅ |
+| **A domain event** (`rate_program_superseded`) | **never, for a credential's own lifecycle** | rate program ❌ |
+
+Only the third produced a blocking finding — because a domain event needs a second emission and a TEL
+does not, so two emissions from one command context competed for one projection's routing key and the
+supersession stamped `status: 'superseded'` over the row it had just sealed. Record it as e.g.
+`"lifecycle_spelling": "TEL state — supersession is an update on the credential's own registry; no
+domain event."` See `references/keri-shape-pass.md` Q2.
 
 **Schema authoring side-step:** When you reach the schema for a credential, write a separate JSON-Schema file at `schemas/{credential_id}.json`.
 
@@ -235,6 +293,23 @@ The three trigger surfaces — which one applies depends on what fires the emiss
 A `required` property with no same-named field on its trigger is an `unsupplied_property`
 error. The fix is to make the names agree — rename the *command* field where the event's
 name is the better one — not to reach for a transform, because there isn't one.
+
+**There are exactly three legal moves, and the third is the one authors miss.**
+
+1. **Make the names agree** — the default, above.
+2. **Declare a mint** (`from`, below) — only for the mint/carry split of a stable business key.
+3. **Go back to Step 1.5, then Step 3** — the credential is the wrong shape or the wrong granularity.
+
+Move 3 is the resolution whenever the value is **derived from state** rather than named anywhere. Moves
+1 and 2 cannot reach a `state.*` derivation by construction: there is no name to agree with, and `from`
+names envelope slots only. An author who does not know move 3 exists has no legal option left and
+invents a payload field — which is, mechanically, how this corpus's two derived booleans were authored
+(`in_mandate` from `state.mandate_states.exists(…)`, `governance_sealed_before_freeze` from
+`size(state.sealed_governance) > 0`). Both were **modelling errors that a correct object graph makes
+unconstructable**: the ordering fact is an edge, the authorization fact is a credential the inbound
+artifact must chain to. The missing-value error was not a hole in the model — it was a detector.
+
+See `references/keri-shape-pass.md` §The back-edge, Q3 and Q4.
 
 **The eight reserved envelope names.** The fold engine stamps these over the payload, so a
 `payload_schema` MUST NOT declare any of them:
@@ -395,6 +470,14 @@ For each reaction:
 
 **The subscriber pattern:** Reactions observe events; they don't push to others. The decentralized property.
 
+**A reaction observes a counterparty's fact, so the truth-maker rule applies here** — reach
+**`keri:acdc`** for what a fold may and may not assume about an inbound credential, and **`keri:spec`**
+where KEL anchoring or ordering is being relied on. You may refuse to construct only what you are the
+truth-maker for: an artifact *you* author can be made structurally impossible, but an artifact you
+merely *witness* must be recorded and then **evaluated as-of at read time, never frozen at ingest**.
+A derived judgment written once on upsert and never recomputed is a bug — and if nothing reads it, it
+is decoration. See `references/keri-shape-pass.md` §The truth-maker rule.
+
 ## Step 7 — Workflows
 
 **Goal:** Name the multi-step external interactions from this role's perspective.
@@ -418,6 +501,20 @@ The exchange palette across steps:
 **Goal:** Define what this role looks at.
 
 Projections fold events into views. Locksmith renders them.
+
+**Before you author the columns, run two shape checks on the row** (`references/keri-shape-pass.md`
+Q1 and Q2):
+
+- **A row carrying both a decision and a status is a credential wearing a table.** Decision fields —
+  `decided_by`, `decided_at`, `rationale`, `*_reference`, `approval*` — beside a `status` column mean
+  the thing this row describes is an issued artifact, and the row should be a projection *of* that
+  credential's TEL rather than the place its standing is decided.
+- **A `status` a fold handler sets from a literal is a lifecycle spelled as a column.** `{"op":
+  "set", "target": "status", "value": "'superseded'"}` makes the status a function of *which event
+  arrived*. If the underlying thing is a credential, its standing is its TEL state and "current" is a
+  **dated query** over effective dates and the read date — derived, never stamped. A projection that
+  answers "which one is live" while holding neither the approval nor the effective date is making a
+  claim it cannot support.
 
 For each:
 
