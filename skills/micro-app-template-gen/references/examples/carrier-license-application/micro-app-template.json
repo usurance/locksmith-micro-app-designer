@@ -6,19 +6,83 @@
         "instance_key": "'license_registry'"
       },
       "description": "Local registry of licenses this carrier has applied for, been granted, or had revoked. Folded from outbound applications and inbound grants/revocations.",
+      "events": {
+        "application_submitted": {
+          "description": "This carrier submitted a licence application to a regulator.",
+          "payload_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "jurisdiction": {
+                "type": "string"
+              },
+              "lines_of_business": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "submitted_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "jurisdiction",
+              "lines_of_business",
+              "submitted_at"
+            ],
+            "type": "object"
+          }
+        },
+        "license_granted": {
+          "description": "A regulator granted this carrier a licence; the credential arrived and was admitted.",
+          "payload_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "jurisdiction": {
+                "type": "string"
+              },
+              "lines_of_business": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "jurisdiction",
+              "lines_of_business"
+            ],
+            "type": "object"
+          }
+        },
+        "license_revoked": {
+          "description": "A regulator revoked a licence this carrier held.",
+          "payload_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "jurisdiction": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          }
+        }
+      },
       "fold": {
         "application_submitted": [
           {
             "op": "append",
             "target": "applications",
-            "value": "{ \"application_said\": event.application_said, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"submitted_at\": event.submitted_at, \"status\": \"pending\" }"
+            "value": "{ \"application_said\": event.credential_said, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"submitted_at\": event.submitted_at, \"status\": \"pending\" }"
           }
         ],
         "license_granted": {
-          "expression": "{ \"applications\": state.applications.map(a, a.jurisdiction == event.jurisdiction && a.status == \"pending\" ? { \"application_said\": a.application_said, \"jurisdiction\": a.jurisdiction, \"lines_of_business\": a.lines_of_business, \"submitted_at\": a.submitted_at, \"status\": \"granted\" } : a), \"active_licenses\": state.active_licenses + [{ \"license_said\": event.license_said, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"granted_at\": event.granted_at }], \"revoked_licenses\": state.revoked_licenses }"
+          "expression": "{ \"applications\": state.applications.map(a, a.jurisdiction == event.jurisdiction && a.status == \"pending\" ? { \"application_said\": a.application_said, \"jurisdiction\": a.jurisdiction, \"lines_of_business\": a.lines_of_business, \"submitted_at\": a.submitted_at, \"status\": \"granted\" } : a), \"active_licenses\": state.active_licenses + [{ \"license_said\": event.credential_said, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"granted_at\": event.datetime }], \"revoked_licenses\": state.revoked_licenses }"
         },
         "license_revoked": {
-          "expression": "{ \"applications\": state.applications, \"active_licenses\": state.active_licenses.filter(l, l.license_said != event.license_said), \"revoked_licenses\": state.revoked_licenses + state.active_licenses.filter(l, l.license_said == event.license_said).map(l, { \"license_said\": l.license_said, \"jurisdiction\": l.jurisdiction, \"revoked_at\": event.revoked_at }) }"
+          "expression": "{ \"applications\": state.applications, \"active_licenses\": state.active_licenses.filter(l, l.license_said != event.credential_said), \"revoked_licenses\": state.revoked_licenses + state.active_licenses.filter(l, l.license_said == event.credential_said).map(l, { \"license_said\": l.license_said, \"jurisdiction\": l.jurisdiction, \"revoked_at\": event.datetime }) }"
         }
       },
       "id": "license_registry",
@@ -140,8 +204,8 @@
         {
           "events": [
             {
+              "credential_said": "EApp1SAID",
               "payload": {
-                "application_said": "EApp1SAID",
                 "jurisdiction": "US-CA",
                 "lines_of_business": [
                   "property"
@@ -151,10 +215,10 @@
               "type": "application_submitted"
             },
             {
+              "credential_said": "ELicense1SAID",
+              "datetime": "2026-08-10T00:00:00Z",
               "payload": {
-                "granted_at": "2026-08-10T00:00:00Z",
                 "jurisdiction": "US-CA",
-                "license_said": "ELicense1SAID",
                 "lines_of_business": [
                   "property"
                 ]
@@ -191,8 +255,8 @@
         {
           "events": [
             {
+              "credential_said": "EApp1SAID",
               "payload": {
-                "application_said": "EApp1SAID",
                 "jurisdiction": "US-CA",
                 "lines_of_business": [
                   "property"
@@ -202,10 +266,10 @@
               "type": "application_submitted"
             },
             {
+              "credential_said": "ELicense1SAID",
+              "datetime": "2026-08-10T00:00:00Z",
               "payload": {
-                "granted_at": "2026-08-10T00:00:00Z",
                 "jurisdiction": "US-CA",
-                "license_said": "ELicense1SAID",
                 "lines_of_business": [
                   "property"
                 ]
@@ -213,10 +277,9 @@
               "type": "license_granted"
             },
             {
-              "payload": {
-                "license_said": "ELicense1SAID",
-                "revoked_at": "2026-09-01T00:00:00Z"
-              },
+              "credential_said": "ELicense1SAID",
+              "datetime": "2026-09-01T00:00:00Z",
+              "payload": {},
               "type": "license_revoked"
             }
           ],
@@ -269,8 +332,7 @@
         {
           "aggregate_id": "license_registry",
           "event_type": "application_submitted",
-          "kind": "aggregate_event",
-          "payload_mapping": "{ \"application_said\": credential.said, \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"submitted_at\": command.submitted_at }"
+          "kind": "aggregate_event"
         }
       ],
       "id": "submit_application",
@@ -423,7 +485,7 @@
       }
     ]
   },
-  "d": "EKq_OB3uYT_Y80jP1HlGsssfhicB5M7yq9owjggy0jAr",
+  "d": "EFw1Ccs6d_1g1g1L5rZ4ASxbV7PMnV84uVk4W9NY608R",
   "header": {
     "description": "The carrier's side of license application: a startup insurance carrier submits an application to a state regulator and processes the resulting grant or revocation. Pivotal event: an application has been submitted and adjudicated.",
     "display_name": "Carrier Applies for License",
@@ -461,9 +523,9 @@
           {
             "op": "upsert",
             "set": {
-              "granted_at": "event.granted_at",
+              "granted_at": "event.datetime",
               "jurisdiction": "event.jurisdiction",
-              "license_said": "event.license_said",
+              "license_said": "event.credential_said",
               "lines_of_business": "event.lines_of_business"
             }
           }
@@ -478,7 +540,7 @@
       "name": "My Active Licenses",
       "on_unknown_event": "ignore",
       "ordering": "source_seq",
-      "primary_key": "license_said",
+      "primary_key": "credential_said",
       "row_schema": {
         "additionalProperties": false,
         "properties": {
@@ -516,10 +578,10 @@
         {
           "events": [
             {
+              "credential_said": "ELicense1SAID",
+              "datetime": "2026-08-10T00:00:00Z",
               "payload": {
-                "granted_at": "2026-08-10T00:00:00Z",
                 "jurisdiction": "US-CA",
-                "license_said": "ELicense1SAID",
                 "lines_of_business": [
                   "property"
                 ]
@@ -544,10 +606,10 @@
         {
           "events": [
             {
+              "credential_said": "ELicense1SAID",
+              "datetime": "2026-08-10T00:00:00Z",
               "payload": {
-                "granted_at": "2026-08-10T00:00:00Z",
                 "jurisdiction": "US-CA",
-                "license_said": "ELicense1SAID",
                 "lines_of_business": [
                   "property"
                 ]
@@ -555,9 +617,8 @@
               "type": "license_granted"
             },
             {
-              "payload": {
-                "license_said": "ELicense1SAID"
-              },
+              "credential_said": "ELicense1SAID",
+              "payload": {},
               "type": "license_revoked"
             }
           ],
@@ -576,8 +637,7 @@
         {
           "aggregate_id": "license_registry",
           "event_type": "license_granted",
-          "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": event.credential.said, \"jurisdiction\": event.credential.attributes.jurisdiction, \"lines_of_business\": event.credential.attributes.lines_of_business, \"granted_at\": event.datetime }"
+          "kind": "aggregate_event"
         }
       ],
       "failure_policy": {
@@ -597,8 +657,7 @@
         {
           "aggregate_id": "license_registry",
           "event_type": "license_revoked",
-          "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": event.credential.said, \"jurisdiction\": event.credential.attributes.jurisdiction, \"revoked_at\": event.datetime }"
+          "kind": "aggregate_event"
         }
       ],
       "failure_policy": {
@@ -673,7 +732,7 @@
       "type": "binding_link"
     }
   ],
-  "spec_version": "micro-app-template/0.1",
+  "spec_version": "micro-app-template/0.2",
   "workflows": [
     {
       "counterparty_role": "state-doi",

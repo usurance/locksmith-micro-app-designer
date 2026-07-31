@@ -156,8 +156,10 @@ Then the two concierge-api gates. **Both must exit 0**, and they cover different
 substitutes for the other.
 
 `micro-app check` — the static gate. It is the **only** one that sees routing and emission-binding
-defects (`boundary.instance_key` / `primary_key` coverage, every `event.<field>` a fold reads being
-supplied by some emission's `payload_mapping`). A test vector structurally cannot catch these, because
+defects (`boundary.instance_key` / `primary_key` coverage, every `event.<field>` a fold reads being a
+`required` property of that event's declared `payload_schema`, one of the eight envelope names,
+or a declared `from` mint of one of them).
+A test vector structurally cannot catch these, because
 it supplies its own event payloads. Needs no vault and no keri stack.
 
 ```bash

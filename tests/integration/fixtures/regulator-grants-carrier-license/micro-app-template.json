@@ -6,6 +6,194 @@
         "instance_key": "'license_registry'"
       },
       "description": "Authoritative registry of every carrier_license this regulator has touched: pending applications under review, active licenses currently in force, suspended licenses awaiting reinstatement or revocation, denied applications, and revoked licenses. The single source of truth for the regulator's TEL-backed licensing posture.",
+      "events": {
+        "application_denied": {
+          "description": "This regulator adjudicated a pending application unfavorably and spurned it back to the applicant; no license credential was issued.",
+          "payload_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "application_id": {
+                "type": "string"
+              },
+              "denial_reason": {
+                "type": "string"
+              },
+              "denied_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "application_id",
+              "denial_reason",
+              "denied_at"
+            ],
+            "type": "object"
+          }
+        },
+        "application_received": {
+          "description": "A carrier presented a license application via IPEX grant and this regulator admitted it into the review queue; the application's domain identity is minted from the SAID of the credential just admitted.",
+          "payload_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "application_id": {
+                "from": "credential_said",
+                "type": "string"
+              },
+              "jurisdiction": {
+                "type": "string"
+              },
+              "lines_of_business": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "application_id",
+              "jurisdiction",
+              "lines_of_business"
+            ],
+            "type": "object"
+          }
+        },
+        "application_withdrawn": {
+          "description": "The applicant carrier withdrew a pending application before this regulator adjudicated it.",
+          "payload_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "application_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "application_id"
+            ],
+            "type": "object"
+          }
+        },
+        "license_granted": {
+          "description": "This regulator adjudicated an application favorably and issued a carrier license to the applicant; the license's identity is minted from the SAID of the credential just issued.",
+          "payload_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "application_id": {
+                "type": "string"
+              },
+              "effective_date": {
+                "format": "date",
+                "type": "string"
+              },
+              "expiration_date": {
+                "format": "date",
+                "type": "string"
+              },
+              "granted_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "holder_aid": {
+                "type": "string"
+              },
+              "jurisdiction": {
+                "type": "string"
+              },
+              "license_number": {
+                "type": "string"
+              },
+              "license_said": {
+                "from": "credential_said",
+                "type": "string"
+              },
+              "lines_of_business": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "license_said",
+              "license_number",
+              "holder_aid",
+              "jurisdiction",
+              "lines_of_business",
+              "effective_date",
+              "expiration_date",
+              "application_id",
+              "granted_at"
+            ],
+            "type": "object"
+          }
+        },
+        "license_reinstated": {
+          "description": "This regulator returned a suspended license to active standing after determining the grounds for suspension had been cleared.",
+          "payload_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "license_said": {
+                "type": "string"
+              },
+              "reinstatement_note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "license_said"
+            ],
+            "type": "object"
+          }
+        },
+        "license_revoked": {
+          "description": "This regulator permanently invalidated a license it had granted; the credential cannot be reinstated after revocation.",
+          "payload_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "license_said": {
+                "type": "string"
+              },
+              "revocation_reason": {
+                "type": "string"
+              },
+              "revoked_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "license_said",
+              "revocation_reason",
+              "revoked_at"
+            ],
+            "type": "object"
+          }
+        },
+        "license_suspended": {
+          "description": "This regulator suspended a license currently in force for a stated reason; the carrier may seek reinstatement once the grounds are cleared.",
+          "payload_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "license_said": {
+                "type": "string"
+              },
+              "suspended_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "suspension_reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "license_said",
+              "suspension_reason",
+              "suspended_at"
+            ],
+            "type": "object"
+          }
+        }
+      },
       "fold": {
         "application_denied": [
           {
@@ -23,7 +211,7 @@
           {
             "op": "append",
             "target": "pending_applications",
-            "value": "{ \"application_id\": event.application_id, \"applicant_aid\": event.applicant_aid, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"received_at\": event.received_at }"
+            "value": "{ \"application_id\": event.application_id, \"applicant_aid\": event.credential_issuer, \"jurisdiction\": event.jurisdiction, \"lines_of_business\": event.lines_of_business, \"received_at\": event.datetime }"
           }
         ],
         "application_withdrawn": [
@@ -305,18 +493,19 @@
         {
           "events": [
             {
+              "credential_issuer": "EApplicant1SAID",
+              "credential_said": "APP-1",
+              "datetime": "2026-08-01T00:00:00Z",
               "payload": {
-                "applicant_aid": "EApplicant1SAID",
-                "application_id": "APP-1",
                 "jurisdiction": "US-CA",
                 "lines_of_business": [
                   "property"
-                ],
-                "received_at": "2026-08-01T00:00:00Z"
+                ]
               },
               "type": "application_received"
             },
             {
+              "credential_said": "ELicense1SAID",
               "payload": {
                 "application_id": "APP-1",
                 "effective_date": "2026-08-15",
@@ -325,7 +514,6 @@
                 "holder_aid": "EApplicant1SAID",
                 "jurisdiction": "US-CA",
                 "license_number": "CA-0001",
-                "license_said": "ELicense1SAID",
                 "lines_of_business": [
                   "property"
                 ]
@@ -358,18 +546,19 @@
         {
           "events": [
             {
+              "credential_issuer": "EApplicant2SAID",
+              "credential_said": "APP-2",
+              "datetime": "2026-08-01T00:00:00Z",
               "payload": {
-                "applicant_aid": "EApplicant2SAID",
-                "application_id": "APP-2",
                 "jurisdiction": "US-CA",
                 "lines_of_business": [
                   "auto"
-                ],
-                "received_at": "2026-08-01T00:00:00Z"
+                ]
               },
               "type": "application_received"
             },
             {
+              "credential_said": "ELicense2SAID",
               "payload": {
                 "application_id": "APP-2",
                 "effective_date": "2026-08-15",
@@ -378,7 +567,6 @@
                 "holder_aid": "EApplicant2SAID",
                 "jurisdiction": "US-CA",
                 "license_number": "CA-0002",
-                "license_said": "ELicense2SAID",
                 "lines_of_business": [
                   "auto"
                 ]
@@ -460,8 +648,7 @@
         {
           "aggregate_id": "license_registry",
           "event_type": "license_granted",
-          "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": credential.said, \"holder_aid\": command.holder_aid, \"license_number\": command.license_number, \"jurisdiction\": command.jurisdiction, \"lines_of_business\": command.lines_of_business, \"effective_date\": command.effective_date, \"expiration_date\": command.expiration_date, \"application_id\": command.application_id, \"granted_at\": command.granted_at }"
+          "kind": "aggregate_event"
         }
       ],
       "id": "grant_license",
@@ -562,8 +749,7 @@
         {
           "aggregate_id": "license_registry",
           "event_type": "application_denied",
-          "kind": "aggregate_event",
-          "payload_mapping": "{ \"application_id\": command.application_id, \"denial_reason\": command.denial_reason, \"denied_at\": command.denied_at }"
+          "kind": "aggregate_event"
         }
       ],
       "id": "spurn_application",
@@ -614,8 +800,7 @@
         {
           "aggregate_id": "license_registry",
           "event_type": "license_suspended",
-          "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": command.license_said, \"suspension_reason\": command.suspension_reason, \"suspended_at\": command.suspended_at }"
+          "kind": "aggregate_event"
         }
       ],
       "id": "suspend_license",
@@ -667,8 +852,7 @@
         {
           "aggregate_id": "license_registry",
           "event_type": "license_reinstated",
-          "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": command.license_said, \"reinstatement_note\": command.reinstatement_note }"
+          "kind": "aggregate_event"
         }
       ],
       "id": "reinstate_license",
@@ -714,8 +898,7 @@
         {
           "aggregate_id": "license_registry",
           "event_type": "license_revoked",
-          "kind": "aggregate_event",
-          "payload_mapping": "{ \"license_said\": command.license_said, \"revocation_reason\": command.revocation_reason, \"revoked_at\": command.revoked_at }"
+          "kind": "aggregate_event"
         }
       ],
       "id": "revoke_license",
@@ -858,7 +1041,7 @@
       }
     ]
   },
-  "d": "EDKqYFkYi5G9iceVcfee7y2jXmNI2ydjMh4R2Sma3c3j",
+  "d": "ENedII_v-ENQneBEFzTSt_6mpPlhMBZc7dN7WmD-DvXr",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",
@@ -907,11 +1090,11 @@
           {
             "op": "upsert",
             "set": {
-              "applicant_aid": "event.applicant_aid",
+              "applicant_aid": "event.credential_issuer",
               "application_id": "event.application_id",
               "jurisdiction": "event.jurisdiction",
               "lines_of_business": "event.lines_of_business",
-              "received_at": "event.received_at"
+              "received_at": "event.datetime"
             }
           }
         ],
@@ -974,14 +1157,14 @@
         {
           "events": [
             {
+              "credential_issuer": "EApplicant1SAID",
+              "credential_said": "APP-1",
+              "datetime": "2026-08-01T00:00:00Z",
               "payload": {
-                "applicant_aid": "EApplicant1SAID",
-                "application_id": "APP-1",
                 "jurisdiction": "US-CA",
                 "lines_of_business": [
                   "property"
-                ],
-                "received_at": "2026-08-01T00:00:00Z"
+                ]
               },
               "type": "application_received"
             }
@@ -1004,14 +1187,14 @@
         {
           "events": [
             {
+              "credential_issuer": "EApplicant1SAID",
+              "credential_said": "APP-1",
+              "datetime": "2026-08-01T00:00:00Z",
               "payload": {
-                "applicant_aid": "EApplicant1SAID",
-                "application_id": "APP-1",
                 "jurisdiction": "US-CA",
                 "lines_of_business": [
                   "property"
-                ],
-                "received_at": "2026-08-01T00:00:00Z"
+                ]
               },
               "type": "application_received"
             },
@@ -1151,6 +1334,7 @@
         {
           "events": [
             {
+              "credential_said": "ELicense1SAID",
               "payload": {
                 "effective_date": "2026-08-15",
                 "expiration_date": "2027-08-15",
@@ -1158,7 +1342,6 @@
                 "holder_aid": "EApplicant1SAID",
                 "jurisdiction": "US-CA",
                 "license_number": "CA-0001",
-                "license_said": "ELicense1SAID",
                 "lines_of_business": [
                   "property"
                 ]
@@ -1187,6 +1370,7 @@
         {
           "events": [
             {
+              "credential_said": "ELicense1SAID",
               "payload": {
                 "effective_date": "2026-08-15",
                 "expiration_date": "2027-08-15",
@@ -1194,7 +1378,6 @@
                 "holder_aid": "EApplicant1SAID",
                 "jurisdiction": "US-CA",
                 "license_number": "CA-0001",
-                "license_said": "ELicense1SAID",
                 "lines_of_business": [
                   "property"
                 ]
@@ -1226,8 +1409,7 @@
         {
           "aggregate_id": "license_registry",
           "event_type": "application_received",
-          "kind": "aggregate_event",
-          "payload_mapping": "{ \"application_id\": event.credential.said, \"applicant_aid\": event.credential.issuer, \"jurisdiction\": event.credential.attributes.jurisdiction, \"lines_of_business\": event.credential.attributes.lines_of_business, \"received_at\": event.datetime }"
+          "kind": "aggregate_event"
         }
       ],
       "failure_policy": {
@@ -1250,8 +1432,7 @@
         {
           "aggregate_id": "license_registry",
           "event_type": "application_withdrawn",
-          "kind": "aggregate_event",
-          "payload_mapping": "{ \"application_id\": event.payload.application_id, \"withdrawn_at\": event.datetime }"
+          "kind": "aggregate_event"
         }
       ],
       "failure_policy": {
@@ -1379,7 +1560,7 @@
       "type": "binding_link"
     }
   ],
-  "spec_version": "micro-app-template/0.1",
+  "spec_version": "micro-app-template/0.2",
   "workflows": [
     {
       "counterparty_role": "carrier",

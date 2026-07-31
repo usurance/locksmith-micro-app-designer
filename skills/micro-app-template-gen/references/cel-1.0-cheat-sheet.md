@@ -2,7 +2,7 @@
 
 `CEL/1.0` is the executable expression language for predicate, computational,
 and validation rules, plus fold handlers (aggregate and projection), the
-`payload_mapping`, `lens_rule_ref`, and `row_filter_rule_ref` slots.
+`lens_rule_ref` and `row_filter_rule_ref` slots.
 
 **Claim discipline.** `CEL/1.0` **replaces** the framework's earlier bespoke
 language (UEL) entirely — it does not rename it and does not equate it: UEL
@@ -40,11 +40,11 @@ scope.
 | `commands[].auth_preconditions[].rule_ref` (`predicate`, purpose `auth_precondition`) | `{ principal, command }` |
 | `commands[].state_preconditions[].rule_ref` (purpose `state_precondition`) | `{ state, command, principal }` |
 | `commands[].temporal_preconditions[].rule_ref` (purpose `temporal_precondition`) | `{ command, now() }` |
-| `commands[].emissions[].payload_mapping` (kind `aggregate_event`) | `{ command, state }` — produces the new event's payload |
-| `reactions[].emissions[].payload_mapping` (trigger `credential_received`) | `{ event, state }` — `event.credential.*` available |
-| `reactions[].emissions[].payload_mapping` (trigger `exn_received`) | `{ event, state }` — `event.payload.*` available |
-| `reactions[].emissions[].payload_mapping` (trigger `lifecycle_event`) | `{ event, state }` — `event.from_state`, `event.to_state`, `event.credential.*` (the transitioning credential) |
 | Aggregate `fold.<event_type>` handler (op list or raw reducer) | `{ state, event }` — `state` is the folded state **before** this event's step is applied |
+| ↳ …for an event a **command** emitted | `event.<prop>` for each declared property, bound by name from `command.<prop>`. There is no emission-side expression: an `aggregate_event` emission is `{kind, aggregate_id, event_type}` |
+| ↳ …for an event a **`credential_received` reaction** emitted | `event.<prop>` bound by name from `event.credential.attributes.<prop>`, plus the envelope's `event.credential_said`, `event.credential_issuer`, `event.credential_edges.<name>` |
+| ↳ …for an event an **`exn_received` reaction** emitted | `event.<prop>` bound by name from the inbound exn body's `<prop>` |
+| ↳ …for an event a **`lifecycle_event` reaction** emitted | `event.<prop>` bound by name from the lifecycle event's payload; the transitioning credential's provenance arrives on the envelope as above |
 | Aggregate invariant (`aggregates[].invariants[].rule_ref`) | `{ state, event }` — `state` is the **candidate** state, produced by speculatively applying the proposed event's fold step, before that event is appended |
 | Projection `fold.<event_type>` handler (`shape: "collection"`) | `{ row, event }` — `row` is the routed row (selected by `primary_key`), or `null` before its first upsert |
 | Projection `fold.<event_type>` handler (`shape: "object"`) | `{ state, event }` — same as an aggregate's fold; no `row`, no invariants |
@@ -72,7 +72,11 @@ SAID instead. Don't author one.
   CEL, deliberately) alongside whatever fields the event's `payload_schema`
   declares (e.g. a `license_received` event with payload fields
   `jurisdiction`, `effective` is read as `event.jurisdiction`,
-  `event.effective` — no `.payload.` nesting for the event being folded)
+  `event.effective` — no `.payload.` nesting for the event being folded).
+  Any of these five, plus the credential provenance triple
+  (`credential_said`/`credential_issuer`/`credential_edges`), may also be
+  *minted* into a differently-named payload property via a declared `from`
+  on that property (ten-step-process.md §Step 4, "The declared mint")
 - `event.credential` (reactions on `credential_received` and `lifecycle_event`) — `{ said, type, issuer, holder, attributes, validity, revoked }`
 - `row` — fields of the projection's `row_schema`
 - `attributes` — fields of the credential's `attributes` block
@@ -341,15 +345,17 @@ expressions, write the conversion directly (e.g. `c.said` not
 - **Ternary branches must unify.** `cond ? state + [x] : null` is rejected
   because `list<T>` and `null` don't unify; use `cond ? state + [x] : state`.
 
-- **Reaction `payload_mapping` binds differently per trigger.** For
-  `credential_received`, use `event.credential.*`. For `exn_received`,
-  use `event.payload.*` (the inbound exn body). For `lifecycle_event`,
-  use `event.from_state`/`event.to_state` plus `event.credential.*`
-  (the transitioning credential); `event.payload.*` carries the
-  lifecycle event's own payload, if any. Verify by checking which
-  fields the meta-schema says are populated.
+- **A reaction's trigger decides where a declared property is looked up.**
+  There is no expression to write, but the binding surface still differs:
+  for `credential_received` a property binds from
+  `event.credential.attributes.<name>`; for `exn_received` from the
+  inbound exn body's `<name>`; for `lifecycle_event` from the lifecycle
+  event's own payload, with `event.from_state`/`event.to_state` reachable
+  from the fold. A `required` property with no same-named field on its
+  trigger is an `unsupplied_property` error — so the failure surfaces at
+  check time rather than as a silently-null field.
 
-- **Don't reference `now()` in folds or payload mappings.** These must be
+- **Don't reference `now()` in fold handlers.** These must be
   deterministic; runtime time is supplied via `event.datetime` (the
   event's own stated time, set when the event is appended), which **is**
   deterministic on replay. There is no wall clock in CEL, deliberately.
@@ -376,7 +382,6 @@ The compiler also enforces the expected return type:
 | Aggregate fold handler (op-list step, or raw-reducer `expression`) | same as the aggregate's `state_schema` (a raw reducer produces the *entire* next state) |
 | Projection fold handler (`collection` shape) | same as the projection's `row_schema` (a raw reducer produces the next row, or `null` to delete it) |
 | Projection fold handler (`object` shape) | same as the projection's `state_schema` |
-| `payload_mapping` | same as the target event's `payload_schema` |
 | `computational` (credential attribute) | type of `result_attribute` |
 | `computational` (projection lens, `result_attribute: "row"`) | same as the projection's `row_schema` (or a shaped subset via `omit`/`pick`) |
 | `display_template` and other format-pipe templates | `string` |

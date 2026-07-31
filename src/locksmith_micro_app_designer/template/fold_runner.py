@@ -12,12 +12,21 @@ importing it directly here would be a cross-repo import (out of bounds per
 the migration plan). This module re-implements the same semantics,
 self-contained, so the Designer never depends on concierge-api at runtime.
 
-Behavioral equivalence with the reference engine is asserted, not assumed:
-`tests/micro_app_template/test_fold_runner.py` reproduces the accepted
-spec's §10 gym conformance vectors verbatim (the same vectors
-`concierge-api`'s `tests/computes/test_cel_profile.py` uses) and additionally
-runs every `test_vectors[]` entry shipped by both worked examples
-(`carrier-license-application`, `regulator-grants-carrier-license`) green.
+This module is SUBORDINATE to the reference: it must track
+`computes/fold_engine.py`, never the other way round, and a disagreement
+between the two is a bug here to file, not a judgement call. Behavioral
+equivalence is asserted, not assumed: `tests/micro_app_template/
+test_fold_runner.py` reproduces the accepted spec's §10 gym conformance
+vectors verbatim (the same vectors `concierge-api`'s
+`tests/computes/test_cel_profile.py` uses), mirrors the reference's
+`tests/computes/test_declared_mint.py` behavioral pins, and runs every
+`test_vectors[]` entry shipped by both worked examples green.
+
+Three things the reference grew on 2026-07-28 (owner ruling, register
+findings 36/37) and this re-implementation tracks: the eight-name envelope
+including the credential provenance triple; the declared mint (§6.5 `from`)
+materialized before routing, handling and invariants; and bare-name-only
+routing read off the flattened event, with the CEL branch deleted.
 
 Only what the vector runner needs is implemented here: `fold()` (replay a
 handler map over an ordered event list) and `try_append()` (fold one
@@ -197,12 +206,21 @@ def cel_env(slot: str) -> CelEnv:
     return CelEnv(slot)
 
 
-_BARE_IDENTIFIER = re.compile(r"^[A-Za-z_]\w*$")
+#: ASCII, deliberately, mirroring the reference's `computes/cel_env.py`. `\w`
+#: is Unicode-aware in Python 3, so a `\w` class routes `café` while
+#: `micro-app check`'s `classify_selector` -- whose class is ASCII -- calls it
+#: `complex` and ERRORs. That divergence was measured in the reference's own
+#: fix round; this re-implementation inherits the fix rather than the bug.
+_BARE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def is_bare_identifier(expression: str) -> bool:
-    """True if `expression` is a plain field name (the common case for
-    `primary_key`/`instance_key`) rather than a real CEL expression."""
+    """True if `expression` is a plain field name -- the whole of what
+    `_route_key` accepts as a collection `primary_key`.
+
+    Does NOT strip: the checker's `classify_selector` strips before it
+    classifies, so a caller must strip first to reach the same verdict.
+    `_route_key` does."""
     return bool(_BARE_IDENTIFIER.fullmatch(expression))
 
 
@@ -216,6 +234,12 @@ class FoldDefinition:
     expressions: `"state"` for aggregates and `object`-shape projections,
     `"collection"` for `collection`-shape projections (per-row, keyed by
     `primary_key`).
+
+    `mints` is the declared mint (authoring spec §6.5 `from`; owner ruling
+    2026-07-28, register finding 37): event type -> {property -> envelope
+    slot}. It is a property of the EVENT TYPE, not of the unit folding it, so
+    an aggregate reads it off its own `events` declaration and a projection
+    off the declarations of whichever aggregates declare its source events.
     """
 
     fold: dict[str, Any]
@@ -225,37 +249,105 @@ class FoldDefinition:
     invariants: list[dict] = field(default_factory=list)
     ordering: str = "source_seq"
     on_unknown_event: str = "ignore"          # the only v1 policy (§9.3)
+    mints: dict[str, dict[str, str]] = field(default_factory=dict)
 
     @classmethod
     def aggregate(cls, *, fold: dict, initial_state: Any,
                   invariants: Optional[list[dict]] = None,
-                  ordering: str = "source_seq") -> "FoldDefinition":
+                  ordering: str = "source_seq",
+                  mints: Optional[dict[str, dict[str, str]]] = None) -> "FoldDefinition":
         return cls(fold=fold, initial_state=initial_state, kind="state",
-                   invariants=invariants or [], ordering=ordering)
+                   invariants=invariants or [], ordering=ordering,
+                   mints=mints or {})
 
     @classmethod
     def object_projection(cls, *, fold: dict, initial_state: Any,
-                           ordering: str = "source_seq") -> "FoldDefinition":
+                           ordering: str = "source_seq",
+                           mints: Optional[dict[str, dict[str, str]]] = None) -> "FoldDefinition":
         return cls(fold=fold, initial_state=initial_state, kind="state",
-                   ordering=ordering)
+                   ordering=ordering, mints=mints or {})
 
     @classmethod
     def collection_projection(cls, *, fold: dict, primary_key: str,
-                               ordering: str = "source_seq") -> "FoldDefinition":
+                               ordering: str = "source_seq",
+                               mints: Optional[dict[str, dict[str, str]]] = None) -> "FoldDefinition":
         return cls(fold=fold, initial_state={}, kind="collection",
-                   primary_key=primary_key, ordering=ordering)
+                   primary_key=primary_key, ordering=ordering,
+                   mints=mints or {})
 
 
 def _flatten_event(event: dict) -> dict:
     """`event` always carries an envelope alongside the typed payload
-    (accepted spec §4.1/§9.4; cheat-sheet §2)."""
+    (accepted spec §4.1/§9.4; cheat-sheet §2): `event.type`, `event.said`,
+    `event.seq`, `event.source_aid`, `event.datetime`, the credential
+    provenance triple, plus every payload field at the top level.
+
+    `credential_said` / `credential_issuer` / `credential_edges` carry the
+    protocol facts about the ACDC behind an event -- the SAID of the
+    credential a reaction received or a command just issued, its issuer, and
+    its resolved edge SAIDs. They are envelope rather than payload because
+    with `payload_mapping` removed there is no expression that could copy
+    them in, and because they are facts the protocol establishes rather than
+    data a producer authored.
+
+    All eight stamps come AFTER the merge, so all eight names are reserved: a
+    payload supplying one has its value silently discarded. The authoring
+    spec (§6.5) forbids declaring them; this is the runtime half of that rule
+    (register finding 36)."""
     flat = dict(event.get("payload", {}) or {})
     flat["type"] = event.get("type", "")
     flat["said"] = event.get("said", "")
     flat["seq"] = event.get("seq", 0)
     flat["source_aid"] = event.get("source_aid", "")
     flat["datetime"] = event.get("datetime", "")
+    flat["credential_said"] = event.get("credential_said", "")
+    flat["credential_issuer"] = event.get("credential_issuer", "")
+    flat["credential_edges"] = dict(event.get("credential_edges") or {})
     return flat
+
+
+#: The eight slots a declared mint may name (§6.5), DERIVED from
+#: `_flatten_event` rather than re-listed beside it. A second copy of the list
+#: is a second thing to drift, and drift between two mechanisms implementing
+#: one rule is the class register finding 36 is about.
+ENVELOPE_SLOTS = frozenset(_flatten_event({}))
+
+
+def materialize_mints(event: dict, mints: dict[str, dict[str, str]]) -> dict:
+    """Fill an event's declared mints from its envelope (§6.5 `from`).
+
+    The declared mint is §5.7's kind-3 mint step made schema-visible: the
+    moment a credential's SAID becomes a domain identity is declared on the
+    event type, once, instead of being buried in whichever producer runs
+    first. Materializing it here -- before routing, before handlers, before
+    invariants -- is what lets everything downstream treat it as ordinary
+    payload data: a fold reads `event.application_id` without knowing it was
+    minted, a projection routes on it, and a test vector never mentions it.
+
+    The envelope value WINS over any payload value a producer supplies for
+    that property. That is the finding-36 rule reaching one name further, and
+    it is also why a vector cannot shadow a mint: vectors supply payloads, and
+    the envelope overwrites them.
+
+    The value is read out of `_flatten_event`, so a slot's default (`""`,
+    `0`, a fresh `{}`) is by construction the same value a handler reading
+    that envelope name directly would see. A slot outside the eight is
+    refused: `micro-app check` reports it as `invalid_from_slot`, and reading
+    a same-named payload field instead would silently implement the rename
+    the ruling forbids. Never mutates the input event."""
+    declared = mints.get(event.get("type")) if mints else None
+    if not declared:
+        return event
+    flat = _flatten_event(event)
+    payload = dict(event.get("payload") or {})
+    for prop, slot in declared.items():
+        if slot not in ENVELOPE_SLOTS:
+            raise ValueError(
+                f"declared mint {prop!r} names {slot!r}, which is not one of the "
+                f"eight envelope slots {sorted(ENVELOPE_SLOTS)}; `from` is a closed "
+                "enumeration (§6.5, owner ruling 2026-07-28, finding 37)")
+        payload[prop] = flat[slot]
+    return {**event, "payload": payload}
 
 
 def ordered(events: list[dict], ordering: str) -> list[dict]:
@@ -368,24 +460,60 @@ def _apply_row_handler(handler: Any, row: Optional[dict], event: dict, env: CelE
     return row
 
 
-def _route_key(primary_key: str, event: dict, env: CelEnv) -> Any:
-    if is_bare_identifier(primary_key):
-        return (event.get("payload") or {})[primary_key]
-    return env.eval(primary_key, event=_flatten_event(event))
+def _route_key(primary_key: str, event: dict) -> Any:
+    """Resolve which row `event` routes to: a bare field name, read off the
+    FLATTENED event.
+
+    Flattened, not `event["payload"]`: since credential provenance moved to
+    the envelope, a projection that keys on the SAID of the credential behind
+    the event names `credential_said`, which is an envelope field and appears
+    in no payload. Reading the raw payload made such a selector unroutable
+    while `micro-app check` -- which does know the envelope names -- passed
+    it. A declared mint (§6.5 `from`) is already in that flattened payload by
+    the time routing runs, which is what lets a minted key and a carried key
+    of the same name share a row.
+
+    THE CEL BRANCH IS DELETED, NOT FIXED (owner ruling 2026-07-28, decision
+    D1): a non-bare selector used to route at runtime while `micro-app check`
+    could only report `unanalysable_selector` and skip every routing rule for
+    the container. What the router accepts is now exactly what the checker's
+    `classify_selector` calls a `field` -- a bare identifier, or the
+    `event.<name>` spelling with the prefix stripped. Hence the `.strip()`
+    (the checker strips before classifying, so a padded `"k "` must route
+    rather than be refused at fold time) and the ASCII identifier class.
+
+    A bare name the event does not carry raises `KeyError`: such an event is
+    un-appendable, not mis-folded, and the caller must see that rather than a
+    phantom row."""
+    selector = primary_key.strip() if isinstance(primary_key, str) else ""
+    name = selector[len("event."):] if selector.startswith("event.") else selector
+    if not is_bare_identifier(name):
+        raise ValueError(
+            f"primary_key {primary_key!r} is not routable: a routing selector must be "
+            "a bare field name (optionally spelled `event.<name>`) — constants and CEL "
+            "expressions were removed by the owner ruling of 2026-07-28 "
+            "(register finding 37, decision D1)")
+    return _flatten_event(event)[name]
 
 
 def fold(defn: FoldDefinition, events: list[dict], env: CelEnv) -> Any:
     """Reference fold loop (accepted spec §11, verbatim in structure).
 
     For `kind == "collection"`, returns a `dict[key, row]`; otherwise
-    returns the folded `state` object."""
+    returns the folded `state` object.
+
+    Each event is materialized (§6.5 `from`) before it is routed or handled,
+    on BOTH branches: `_flatten_event` merges the payload first, so a minted
+    property is then visible to a handler as `event.<prop>` and to
+    `_route_key` as a routable field, indistinguishable from a carried one."""
     if defn.kind == "collection":
         rows: dict[Any, dict] = dict(defn.initial_state or {})
         for event in ordered(events, defn.ordering):
+            event = materialize_mints(event, defn.mints)
             handler = defn.fold.get(event["type"])
             if handler is None:
                 continue  # on_unknown_event: ignore (§9.3)
-            key = _route_key(defn.primary_key, event, env)
+            key = _route_key(defn.primary_key, event)
             new_row = _apply_row_handler(handler, rows.get(key), event, env)
             if new_row is None:
                 rows.pop(key, None)
@@ -395,6 +523,7 @@ def fold(defn: FoldDefinition, events: list[dict], env: CelEnv) -> Any:
 
     state = copy.deepcopy(defn.initial_state)
     for event in ordered(events, defn.ordering):
+        event = materialize_mints(event, defn.mints)
         handler = defn.fold.get(event["type"])
         if handler is None:
             continue  # on_unknown_event: ignore (§9.3)
@@ -407,7 +536,14 @@ def try_append(agg: FoldDefinition, current: Any, proposed_event: dict,
     """Speculatively fold `proposed_event` onto `current`, then check every
     invariant over `{state: candidate, event: proposed_event}` (accepted
     spec §6.2/§11). Raises `InvariantViolation(rule_ref)` on the first
-    failing invariant. `current` is never mutated."""
+    failing invariant. `current` is never mutated.
+
+    The proposed event is materialized (§6.5 `from`) FIRST, so both the
+    speculative fold and the invariants see the minted property. Append time
+    is where the mint happens, and an invariant is the last thing evaluated
+    before the append -- a guard that could not read the identity the event is
+    about would be guarding the wrong event."""
+    proposed_event = materialize_mints(proposed_event, agg.mints)
     handler = agg.fold[proposed_event["type"]]
     candidate = _apply_state_handler(handler, current, proposed_event, env)
     flat_event = _flatten_event(proposed_event)
@@ -419,10 +555,75 @@ def try_append(agg: FoldDefinition, current: Any, proposed_event: dict,
 
 # --- template-doc adapters: build a FoldDefinition straight from JSON -------------------
 
+def minted_properties(decl: dict) -> dict[str, str]:
+    """property name -> the envelope slot it is minted from (§6.5 `from`),
+    for one event type's `events` declaration.
+
+    TOTAL over garbage: `projection_mints` calls this for every aggregate
+    declaring a projection's source events, so one aggregate's malformed
+    `payload_schema` must not raise out of an unrelated projection's build.
+    The value is returned as authored -- `materialize_mints` is what decides
+    whether a slot is one of the eight, so an `invalid_from_slot` reaches the
+    Designer's panel as that unit's loud failure rather than vanishing here.
+    """
+    schema = decl.get("payload_schema")
+    props = (schema if isinstance(schema, dict) else {}).get("properties")
+    if not isinstance(props, dict):
+        return {}
+    return {name: sub["from"] for name, sub in props.items()
+            if isinstance(sub, dict) and "from" in sub}
+
+
+def aggregate_mints(agg: dict) -> dict[str, dict[str, str]]:
+    """event type -> {property -> envelope slot} for one aggregate's own
+    `events` declarations (§6.5 `from`)."""
+    out: dict[str, dict[str, str]] = {}
+    for event_type, decl in (agg.get("events") or {}).items():
+        mints = minted_properties(decl if isinstance(decl, dict) else {})
+        if mints:
+            out[event_type] = mints
+    return out
+
+
+def projection_mints(template: dict, proj: dict) -> dict[str, dict[str, str]]:
+    """The mints a projection may rely on, per source event type.
+
+    A projection folds any event of that type, whichever aggregate declared
+    it, so it may only rely on what EVERY declaring aggregate guarantees --
+    the agreeing intersection. Two aggregates minting one property from
+    different slots agree on nothing, so that property is not minted at all
+    and shows up as the absent value it is. Within one template event type
+    names are unique (§6.5), so in practice each type has one declaration.
+
+    THIS READ CROSSES UNITS, so it is total: a malformed aggregate contributes
+    nothing rather than raising, and the Designer's panel renders one unit's
+    vectors without a sibling unit's garbage taking them down. Compare
+    `aggregate_mints`, which reads an aggregate's OWN declaration."""
+    out: dict[str, dict[str, str]] = {}
+    aggregates = (template or {}).get("aggregates")
+    if not isinstance(aggregates, list):
+        return out
+    for event_type in proj.get("source_events") or []:
+        agreed: Optional[dict[str, str]] = None
+        for agg in aggregates:
+            events = agg.get("events") if isinstance(agg, dict) else None
+            decl = events.get(event_type) if isinstance(events, dict) else None
+            if decl is None:
+                continue
+            mints = minted_properties(decl if isinstance(decl, dict) else {})
+            agreed = (mints if agreed is None
+                      else {p: s for p, s in agreed.items() if mints.get(p) == s})
+        if agreed:
+            out[event_type] = agreed
+    return out
+
+
 def fold_definition_from_aggregate(agg: dict, *, rules_by_id: dict[str, dict]) -> FoldDefinition:
     """Build a `FoldDefinition` from an `aggregates[]` entry, resolving each
     `invariants[].rule_ref` against `rules_by_id` (id -> rule dict) into its
-    CEL `expression`, exactly as `xref.py` resolves the same references."""
+    CEL `expression`, exactly as `xref.py` resolves the same references.
+
+    `mints` come off the aggregate's OWN `events` declarations (§6.5)."""
     invariants: list[dict] = []
     for inv in agg.get("invariants", []) or []:
         rule_ref = inv.get("rule_ref")
@@ -435,24 +636,36 @@ def fold_definition_from_aggregate(agg: dict, *, rules_by_id: dict[str, dict]) -
         fold=agg.get("fold", {}) or {},
         initial_state=agg.get("initial_state"),
         invariants=invariants,
+        ordering=agg.get("ordering", "source_seq"),
+        mints=aggregate_mints(agg),
     )
 
 
-def fold_definition_from_projection(proj: dict) -> FoldDefinition:
+def fold_definition_from_projection(proj: dict, *,
+                                     doc: Optional[dict] = None) -> FoldDefinition:
     """Build a `FoldDefinition` from a `projections[]` entry. `shape`
-    defaults to `"collection"` per the meta-schema."""
+    defaults to `"collection"` per the meta-schema.
+
+    `doc` (the whole template) is what the mints are read from: `from` is
+    declared on the event type in some aggregate's `events`, never on the
+    projection (§6.5). Without it a projection folds unminted -- which is the
+    honest answer when the caller has only the entry, and the reason the
+    Designer's panel hands the whole document down."""
     shape = proj.get("shape", "collection")
     ordering = proj.get("ordering", "source_seq")
+    mints = projection_mints(doc or {}, proj)
     if shape == "object":
         return FoldDefinition.object_projection(
             fold=proj.get("fold", {}) or {},
             initial_state=proj.get("initial_state"),
             ordering=ordering,
+            mints=mints,
         )
     return FoldDefinition.collection_projection(
         fold=proj.get("fold", {}) or {},
         primary_key=proj.get("primary_key", ""),
         ordering=ordering,
+        mints=mints,
     )
 
 
@@ -540,7 +753,10 @@ def run_test_vectors(entry: dict, *, entry_kind: str,
 
     `entry_kind` is `"aggregate"` or `"projection"`. `doc` (the whole
     template document) is required for aggregates whose invariant vectors
-    need `rules[]` to resolve `invariants[].rule_ref` -> `expression`.
+    need `rules[]` to resolve `invariants[].rule_ref` -> `expression`, and
+    for projections whose source events carry a declared mint (§6.5 `from`
+    lives on the event type in `aggregates[].events`, never on the
+    projection). An aggregate's own mints come off `entry` itself.
     """
     vectors = entry.get("test_vectors") or []
     if not vectors:
@@ -551,7 +767,7 @@ def run_test_vectors(entry: dict, *, entry_kind: str,
         defn = fold_definition_from_aggregate(entry, rules_by_id=rules_by_id)
         is_collection = False
     elif entry_kind == "projection":
-        defn = fold_definition_from_projection(entry)
+        defn = fold_definition_from_projection(entry, doc=doc)
         is_collection = entry.get("shape", "collection") == "collection"
     else:
         raise ValueError(f"unknown entry_kind: {entry_kind!r}")
