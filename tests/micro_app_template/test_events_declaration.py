@@ -31,6 +31,7 @@ load-bearing and the checker is follow-on work:
      register finding 37; authoring spec §6.5.
 """
 import json
+import os
 import pathlib
 
 import jsonschema
@@ -237,17 +238,101 @@ def test_credential_issuer_property_name_is_rejected_without_from():
         _validate_declaration(decl)
 
 
-def test_landed_corpus_still_validates():
-    """The widening must not regress the five landed bundles. Read out of ugard's
-    working tree, mirroring concierge-api's calibration test."""
-    corpus = sorted(
-        pathlib.Path("/Users/seriouscoderone/code/ugard/docs/micro-apps").glob(
-            "*/micro-app-template.json"
-        )
+def test_from_enum_is_exactly_the_eight_envelope_names():
+    """The enum's CONTENTS, not just its closedness.
+
+    `test_from_outside_the_enum_is_rejected` proves a non-member is refused, which
+    stays true no matter how much of the enum you delete -- a mutation removing two
+    values from the meta-schema produced ZERO failures across the whole suite. The
+    hole that leaves is the check-red/runtime-green direction: an author declares
+    `"from": "credential_issuer"`, the engine would mint it perfectly well, and the
+    meta-schema refuses a legal template. So assert EQUALITY, as a set: the enum is
+    the eight names the envelope supplies, no more and no fewer.
+    """
+    enum = _defs()["event_declaration"]["properties"]["payload_schema"]["properties"][
+        "properties"
+    ]["additionalProperties"]["properties"]["from"]["enum"]
+    assert set(enum) == set(RESERVED_ENVELOPE_NAMES)
+    assert len(enum) == len(RESERVED_ENVELOPE_NAMES), f"duplicate entries: {enum}"
+
+
+# --------------------------------------------------------------------------------
+# The landed corpus, per bundle
+#
+# CROSS-REPO COUPLING. `$UGARD_ROOT` (default ~/code/ugard) is a checkout of another
+# repository at whatever revision it happens to be on -- the same override, spelled the
+# same way, as concierge-api's `tests/cli/test_emission_bindings_calibration.py`. Point
+# it at the branch worktree to see the migrated corpus. A failure here means one of:
+# that checkout predates the migration; someone regressed a bundle in ugard; or this
+# meta-schema regressed. Only the last is a bug in this repo.
+#
+# Per BUNDLE, not one monolithic loop: a single assertion over a glob reports the first
+# bundle that breaks and hides the rest, and it cannot carry a per-bundle exemption.
+# --------------------------------------------------------------------------------
+
+UGARD = pathlib.Path(os.environ.get("UGARD_ROOT", pathlib.Path.home() / "code" / "ugard"))
+CORPUS = UGARD / "docs" / "micro-apps"
+
+CORPUS_BUNDLES = [
+    "actuary-attests-product-rating",
+    "carrier-license-application",
+    "chief-underwriting-officer-approves-product-launch",
+    "product-designer-publishes-product-version",
+    "regulator-grants-carrier-license",
+]
+
+#: The two bundles the owner descoped on 2026-07-31 to redesign items, mapped to the
+#: ugard backlog item each waits on. They stay at `micro-app-template/0.1` with their
+#: `payload_mapping`, which this 0.2 meta-schema rejects -- so they fail here by
+#: design. Keyed by BUNDLE IDENTITY, never by path.
+DESCOPED = {
+    "actuary-attests-product-rating":
+        "backlog/2026-07-31-rate-program-as-filed-instrument.md",
+    "chief-underwriting-officer-approves-product-launch":
+        "backlog/2026-07-31-cuo-mandate-and-governance-objects.md",
+}
+
+
+def descoped_reason(bundle):
+    """The one wording for this exemption, shared verbatim with concierge-api's
+    `tests/cli/test_emission_bindings_calibration.py`. Two suites, one sentence, so a
+    grep for either backlog item finds both."""
+    return (
+        f"descoped by owner ruling 2026-07-31: {bundle} stays at "
+        f"micro-app-template/0.1 with its payload_mapping until the redesign in "
+        f"ugard {DESCOPED[bundle]} lands. strict=True -- when it lands and the "
+        f"bundle migrates, this XPASSes and the suite goes red until the "
+        f"exemption is deleted."
     )
-    if not corpus:
-        pytest.skip("ugard corpus not available in this checkout")
+
+
+_CORPUS_PARAMS = [
+    pytest.param(
+        b,
+        marks=pytest.mark.xfail(strict=True, reason=descoped_reason(b)),
+    ) if b in DESCOPED else b
+    for b in CORPUS_BUNDLES
+]
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="ugard corpus not checked out")
+@pytest.mark.parametrize("bundle", _CORPUS_PARAMS)
+def test_landed_corpus_still_validates(bundle):
+    """The widening must not regress the landed bundles."""
+    path = CORPUS / bundle / "micro-app-template.json"
+    assert path.is_file(), f"missing bundle: {path} (corpus at {CORPUS})"
     validator = jsonschema.Draft202012Validator(SCHEMA)
-    for path in corpus:
-        errors = list(validator.iter_errors(json.loads(path.read_text())))
-        assert not errors, f"{path.parent.name}: {[e.message for e in errors]}"
+    errors = list(validator.iter_errors(json.loads(path.read_text())))
+    assert not errors, f"{bundle}: {[e.message for e in errors]}"
+
+
+@pytest.mark.skipif(not CORPUS.is_dir(), reason="ugard corpus not checked out")
+def test_corpus_covers_every_bundle_present():
+    """UNMARKED, and it must stay that way: a sixth bundle must not slip past the
+    per-bundle validation above by simply not being listed. This replaces the reach
+    of the old glob, which the fixed list would otherwise have lost."""
+    found = sorted(p.parent.name for p in CORPUS.glob("*/micro-app-template.json"))
+    assert found == sorted(CORPUS_BUNDLES), (
+        f"corpus membership changed; add the new bundle to CORPUS_BUNDLES "
+        f"(found {found} at {CORPUS})"
+    )
