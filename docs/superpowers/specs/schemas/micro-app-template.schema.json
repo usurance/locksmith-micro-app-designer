@@ -421,9 +421,17 @@
       "type": "object",
       "required": ["type", "payload"],
       "additionalProperties": false,
+      "description": "A vector event is the envelope plus the typed payload, exactly as the fold engine sees it. With `payload_mapping` removed the envelope is the only place a credential's protocol facts can enter a fold, so a vector that exercises a handler reading `event.credential_said` (or a projection keyed on one of the eight slots, or a `from` mint) MUST supply that slot at the event's top level -- never inside `payload`, where the engine's post-merge stamp would discard it. Legal keys are `payload` plus the eight envelope slots; `type` is one of the eight.",
       "properties": {
         "type": { "type": "string" },
-        "payload": { "type": "object" }
+        "payload": { "type": "object" },
+        "said": { "type": "string" },
+        "seq": { "type": "integer" },
+        "source_aid": { "type": "string" },
+        "datetime": { "type": "string" },
+        "credential_said": { "type": "string" },
+        "credential_issuer": { "type": "string" },
+        "credential_edges": { "type": "object" }
       }
     },
     "test_vector": {
