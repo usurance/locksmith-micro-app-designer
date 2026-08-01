@@ -268,8 +268,21 @@ the event envelope as `credential_said`, and your fold handler reads it directly
 - Do **not** declare `credential_said` (or any other envelope name) as a property of your
   event's `payload_schema`. It is reserved — the fold engine stamps the envelope *over* the
   payload, so a payload property with that name is silently discarded.
-- The value is meaningful only when the emission list contains a `kind: credential` exchange
-  emission at or before this one. Put the issuing exchange first.
+- The value is meaningful when **this role has anchored the ACDC** — issued it, or advanced it
+  through a lifecycle state — or when the ACDC **arrived inbound** on the trigger. Issuance is an
+  anchoring act in your own KEL, performed unilaterally; an IPEX exchange *transmits* an
+  already-issued ACDC and is not what makes the SAID exist (authoring spec §6.4,
+  `AMENDMENT-WAVE BLOCK` issuance-is-the-anchor). **So a credential you issue and disclose to
+  nobody still has a SAID your events may carry.**
+  <!-- 2026-08-01: this bullet used to read "The value is meaningful only when the emission list
+       contains a `kind: credential` exchange emission at or before this one. Put the issuing
+       exchange first." That was the superseded exchange-based availability rule
+       (ugard backlog/2026-07-31-issuance-is-the-anchor-not-the-exchange.md). CAVEAT while the
+       redesign in ugard backlog/2026-08-01-derive-keri-primitives-from-the-template.md is open:
+       `micro-app check` still ENFORCES the old rule, so a template that issues without an
+       exchange emission will currently be rejected by the checker even though the spec now
+       permits it. Do not author around the checker — raise it against that item. -->
+
 - Every *attribute* value is already in `command.*`, because your command supplied them. The
   SAID is the one value issuance *creates* rather than *consumes* — which is exactly why it
   lives on the envelope and not in your contract.
