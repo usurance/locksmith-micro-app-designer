@@ -263,9 +263,9 @@ query, not a flag. A TEL's `ts` **MUST be a string from a finite set of state va
 exactly what your `lifecycle.states` list is — `issued`/`revoked` are the spec's *common* encodings,
 not the whole permitted set, so a richer declared state machine is protocol-legal: every state
 change, including issuance and revocation, is a `upd`, and each `transitions[]` entry declares its
-own driver (`via_command` / `via_reaction` / `via_workflow` / `trigger: "automatic"` — see
-`references/ten-step-process.md` §Step 3) rather than mapping to a separate issue/update/revoke
-message type.
+own driver (`via_command` / `via_reaction` / `via_workflow` / `trigger: "automatic"` — the last only
+*alongside* another driver, never alone; see `references/ten-step-process.md` §Step 3) rather than
+mapping to a separate issue/update/revoke message type.
 
 **Then pick ONE spelling and record it.** A credential's lifecycle has two legitimate spellings and
 one wrong one:

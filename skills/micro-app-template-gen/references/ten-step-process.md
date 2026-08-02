@@ -188,8 +188,15 @@ of:
 | `via_workflow` | a single workflow id (string) | that workflow's step drives the transition |
 | `trigger: "automatic"` | + `condition_rule_ref` | the rule evaluates true, with no human action in the loop |
 
+**`trigger: "automatic"` may not be a transition's *sole* driver in this wave** — a rule evaluates
+against no payload, so nothing supplies the `upd`'s subject SAID. It is legitimate *alongside*
+another driver, never alone: `micro-app check` rejects an automatic-only transition
+(`automatic_transition_no_subject`, error severity). See authoring spec §6.4's per-driver subject
+table for why.
+
 A transition MAY declare more than one driver — a license suspended by a regulator's command *or*
-by automatic premium-lapse detection derives the same TEL `upd`:
+by automatic premium-lapse detection derives the same TEL `upd`, with the command supplying the
+subject:
 
 ```json
 { "id": "activate", "from": "pending", "to": "active",

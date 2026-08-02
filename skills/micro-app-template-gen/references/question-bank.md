@@ -121,9 +121,11 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
 - *"What states does this credential go through?"* — list them
 - *"For each state, how is it reached — one of your own commands, an automatic rule, a workflow
   step, or more than one of those?"* → the transition's driver (`via_command` / `via_reaction` /
-  `via_workflow` / `trigger: "automatic"`, ten-step §Step 3). Every state change is the same KERI
-  primitive underneath (a TEL `upd`) whichever driver reaches it — this question is about *what
-  causes it*, never about mapping it to an `issue`/`update`/`revoke` label
+  `via_workflow` / `trigger: "automatic"`, ten-step §Step 3). If the answer is *only* "an automatic
+  rule", ask what else could also reach this state — an automatic driver alone leaves no command or
+  reaction to supply the subject SAID, which `micro-app check` rejects. Every state change is the
+  same KERI primitive underneath (a TEL `upd`) whichever driver reaches it — this question is about
+  *what causes it*, never about mapping it to an `issue`/`update`/`revoke` label
 
 ## Step 4 — Commands
 
