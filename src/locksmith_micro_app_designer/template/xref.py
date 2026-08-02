@@ -77,6 +77,21 @@ def validate_xrefs(doc: dict[str, Any]) -> list[XrefError]:
                     path=f"credentials.exports[{i}].lifecycle.transitions[{k}].via_workflow",
                     reference=wf, target_type="workflow",
                 ))
+            # via_command / via_reaction: a dangling driver id silently disables
+            # the transition (§5.2's defect, reintroduced on the replacement
+            # fields unless checked here -- F4/F5/R10).
+            for n, vc in enumerate(t.get("via_command") or []):
+                if vc not in command_ids:
+                    errors.append(XrefError(
+                        path=f"credentials.exports[{i}].lifecycle.transitions[{k}].via_command[{n}]",
+                        reference=vc, target_type="command",
+                    ))
+            for n, vr in enumerate(t.get("via_reaction") or []):
+                if vr not in reaction_ids:
+                    errors.append(XrefError(
+                        path=f"credentials.exports[{i}].lifecycle.transitions[{k}].via_reaction[{n}]",
+                        reference=vr, target_type="reaction",
+                    ))
             cond = t.get("condition_rule_ref")
             if cond is not None and cond not in rule_ids:
                 errors.append(XrefError(

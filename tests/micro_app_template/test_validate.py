@@ -141,6 +141,53 @@ from locksmith_micro_app_designer.template.xref import validate_xrefs
         },
         "missing-workflow",
     ),
+    # F4/F5/R10: transition via_command must resolve to a declared command id.
+    # A dangling name is a permanently undrivable transition with zero findings
+    # if unchecked -- the same defect §5.2 measured on the field it replaced.
+    (
+        {
+            "rules": [],
+            "workflows": [],
+            "commands": [{
+                "id": "activate_policy", "name": "n", "description": "d",
+                "route": "/x/cmd/activate", "payload_schema": {}, "emissions": [],
+            }],
+            "credentials": {"imports": [], "exports": [{
+                "id": "c1", "name": "n", "description": "d",
+                "envelope": {"holder_role": "r", "verifier_roles": [], "edges": [], "disclosure_mode": "full"},
+                "schema": {"schema_said": "E" + "x" * 43, "schema_path": "schemas/c.json"},
+                "lifecycle": {"states": ["a", "b"], "initial": "a", "transitions": [
+                    {"id": "t1", "from": "a", "to": "b", "via_command": ["missing-driver-command"]}
+                ]},
+                "rule_refs": [],
+                "value_flow": {"implied_credentials": []},
+            }]},
+        },
+        "missing-driver-command",
+    ),
+    # F4/F5/R10: transition via_reaction must resolve to a declared reaction id.
+    (
+        {
+            "rules": [],
+            "workflows": [],
+            "reactions": [{
+                "id": "on_lapse", "description": "d",
+                "trigger": {"type": "scheduled", "cadence": "* * * * *"},
+                "emissions": [],
+            }],
+            "credentials": {"imports": [], "exports": [{
+                "id": "c1", "name": "n", "description": "d",
+                "envelope": {"holder_role": "r", "verifier_roles": [], "edges": [], "disclosure_mode": "full"},
+                "schema": {"schema_said": "E" + "x" * 43, "schema_path": "schemas/c.json"},
+                "lifecycle": {"states": ["a", "b"], "initial": "a", "transitions": [
+                    {"id": "t1", "from": "a", "to": "b", "via_reaction": ["missing-driver-reaction"]}
+                ]},
+                "rule_refs": [],
+                "value_flow": {"implied_credentials": []},
+            }]},
+        },
+        "missing-driver-reaction",
+    ),
     # workflow step command_id reference
     (
         {
@@ -402,6 +449,57 @@ def test_invalid_ipex_verb_fails(minimal_valid_template):
     })
     errors = validate_against_meta_schema(minimal_valid_template, META_SCHEMA)
     assert len(errors) > 0
+
+
+def test_missing_credential_slot_names_the_cause(minimal_valid_template):
+    # F9: a slotless credential exchange (the outbound apply/offer shape this
+    # profile excludes) must say WHY, not just fail an opaque oneOf.
+    minimal_valid_template["commands"].append({
+        "id": "bad",
+        "name": "Bad",
+        "description": "Slotless credential exchange.",
+        "route": "/insurance/cmd/x",
+        "payload_schema": {},
+        "emissions": [
+            {
+                "kind": "exchange",
+                "exchange": {
+                    "kind": "credential",
+                    "schema_said_referenced": "EAbc0000000000000000000000000000000000000000"
+                }
+            }
+        ]
+    })
+    errors = validate_against_meta_schema(minimal_valid_template, META_SCHEMA)
+    assert any("missing_credential_slot" in e.message for e in errors), (
+        f"expected an explanatory missing_credential_slot message, got: {[e.message for e in errors]}"
+    )
+    assert not any("not valid under any of the given schemas" in e.message for e in errors)
+
+
+def test_ambiguous_credential_slot_names_the_cause(minimal_valid_template):
+    # Same defect, opposite shape: both slots declared at once.
+    minimal_valid_template["commands"].append({
+        "id": "bad2",
+        "name": "Bad2",
+        "description": "Exchange declaring both credential slots.",
+        "route": "/insurance/cmd/y",
+        "payload_schema": {},
+        "emissions": [
+            {
+                "kind": "exchange",
+                "exchange": {
+                    "kind": "credential",
+                    "exported_credential_id": "a",
+                    "imported_credential_id": "b"
+                }
+            }
+        ]
+    })
+    errors = validate_against_meta_schema(minimal_valid_template, META_SCHEMA)
+    assert any("ambiguous_credential_slot" in e.message for e in errors), (
+        f"expected an explanatory ambiguous_credential_slot message, got: {[e.message for e in errors]}"
+    )
 
 
 def test_aggregate_validates(minimal_valid_template):
