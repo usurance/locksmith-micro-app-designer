@@ -1,14 +1,22 @@
 # -*- encoding: utf-8 -*-
 """StateMachineDiagram: TEL lifecycle visualization for exported credentials.
 
-Color-coded by tel_primitive:
-  issue=orange, update=teal, revoke=pink.
+Color-coded by transition *driver* (`via_command` / `via_reaction` /
+`via_workflow` / `trigger: "automatic"`), not `tel_primitive` -- that field
+was deleted (authoring spec §6.3, primitives-are-given AMENDMENT-WAVE
+BLOCK, 2026-08-01/02): the TEL records state, not transition, so the
+transition's driver is what the protocol actually lets an edge declare.
+A transition may declare several drivers at once (legal -- e.g. a licence
+suspended by a regulator command *or* on premium lapse), rendered as
+`"multi"`; a transition with none declared is a defect
+(`missing_transition_driver`) and is rendered as `"none"`, distinctly from
+every legal kind, so it reads as a defect rather than silently as blank.
 Pure QGraphicsScene; no external SVG.
 """
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Union
 
 from PySide6.QtCore import QPointF, QRectF, Qt
@@ -16,11 +24,51 @@ from PySide6.QtGui import QBrush, QColor, QFont, QPen, QPolygonF
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
 
 
-_TRANSITION_COLOR: dict[str, str] = {
-    "issue": "#D97757",
-    "update": "#0ABFB0",
-    "revoke": "#E94B7B",
+_DRIVER_COLOR: dict[str, str] = {
+    "command": "#D97757",
+    "reaction": "#0ABFB0",
+    "workflow": "#5B8DEF",
+    "automatic": "#A36AE6",
+    "multi": "#D6A419",
+    "none": "#E94B7B",
 }
+
+# Neutral anchor color for a state with no incoming transition. Under the
+# "issuance is initialization, not a transition" ruling (owner, 2026-08-01)
+# an initial state is not itself driven by anything -- it isn't a defect,
+# so it does not borrow the "none" driver's alarm color.
+_ANCHOR_COLOR = "#8A8F98"
+
+
+def edge_style(transition: dict) -> dict:
+    """Pure function: `{"driver": str, "colour": str}` for one transition
+    dict (the `$defs/transition` shape). Keyed off which of the four driver
+    kinds the transition declares -- `via_command`/`via_reaction` (lists),
+    `via_workflow` (string), `trigger: "automatic"` -- not off `tel_primitive`,
+    which no longer exists on a transition.
+
+    An empty `via_command`/`via_reaction` list does not count as declared
+    (matches the schema's "at least one" `missing_transition_driver` rule),
+    and `trigger: "manual"` names no command, so it is not one of the four
+    driver kinds either.
+    """
+    drivers: list[str] = []
+    if transition.get("via_command"):
+        drivers.append("command")
+    if transition.get("via_reaction"):
+        drivers.append("reaction")
+    if transition.get("via_workflow"):
+        drivers.append("workflow")
+    if transition.get("trigger") == "automatic":
+        drivers.append("automatic")
+
+    if len(drivers) > 1:
+        driver = "multi"
+    elif len(drivers) == 1:
+        driver = drivers[0]
+    else:
+        driver = "none"
+    return {"driver": driver, "colour": _DRIVER_COLOR[driver]}
 
 
 def _tint(hex_color: str, alpha: float) -> str:
@@ -39,7 +87,19 @@ def _tint(hex_color: str, alpha: float) -> str:
 class StateTransition:
     from_state: Union[str, list[str]]
     to_state: str
-    tel_primitive: str
+    via_command: list[str] = field(default_factory=list)
+    via_reaction: list[str] = field(default_factory=list)
+    via_workflow: str = ""
+    trigger: str = ""
+
+    def driver_spec(self) -> dict:
+        """The subset of `$defs/transition` fields `edge_style` needs."""
+        return {
+            "via_command": self.via_command,
+            "via_reaction": self.via_reaction,
+            "via_workflow": self.via_workflow,
+            "trigger": self.trigger,
+        }
 
 
 class StateMachineDiagram(QGraphicsView):
@@ -59,12 +119,13 @@ class StateMachineDiagram(QGraphicsView):
     def state_count(self) -> int:
         return self._state_count
 
-    def _expand(self, transitions: list[StateTransition]) -> list[tuple[str, str, str]]:
-        out: list[tuple[str, str, str]] = []
+    def _expand(self, transitions: list[StateTransition]) -> list[tuple[str, str, dict]]:
+        out: list[tuple[str, str, dict]] = []
         for t in transitions:
             srcs = t.from_state if isinstance(t.from_state, list) else [t.from_state]
+            style = edge_style(t.driver_spec())
             for src in srcs:
-                out.append((src, t.to_state, t.tel_primitive))
+                out.append((src, t.to_state, style))
         return out
 
     def render(self, transitions: list[StateTransition]) -> None:
@@ -79,13 +140,14 @@ class StateMachineDiagram(QGraphicsView):
                     seen.append(s)
         self._state_count = len(seen)
 
-        for src, dst, prim in expanded:
-            color = _TRANSITION_COLOR.get(prim, "#666")
-            self._node_fills.setdefault(dst, color)
+        for src, dst, style in expanded:
+            self._node_fills.setdefault(dst, style["colour"])
         for s in seen:
             if s not in self._node_fills:
-                # Initial state — use issue color as the anchor.
-                self._node_fills[s] = _TRANSITION_COLOR["issue"]
+                # Initial state — no incoming transition (issuance is
+                # initialization, not a transition), so it gets the neutral
+                # anchor color rather than any driver's colour.
+                self._node_fills[s] = _ANCHOR_COLOR
 
         positions: dict[str, QPointF] = {}
         for i, s in enumerate(seen):
@@ -106,12 +168,12 @@ class StateMachineDiagram(QGraphicsView):
             text.setDefaultTextColor(QColor("#1A1C20"))
             text.setPos(x + 8, y + 10)
 
-        for src, dst, prim in expanded:
+        for src, dst, style in expanded:
             if src not in positions or dst not in positions:
                 continue
             start = positions[src]
             end = positions[dst]
-            color = QColor(_TRANSITION_COLOR.get(prim, "#666"))
+            color = QColor(style["colour"])
             pen = QPen(color, 2)
             if src == dst:
                 self._scene.addEllipse(
@@ -135,12 +197,12 @@ class StateMachineDiagram(QGraphicsView):
             )
             self._scene.addPolygon(poly, pen, QBrush(color))
 
-            label_text = prim
+            label_text = style["driver"]
             chip_w = max(34, len(label_text) * 7 + 12)
             chip_h = 16
             mid_x = (x1 + x2) / 2
             mid_y = (y1 + y2) / 2 - chip_h - 4
-            tinted_bg = _tint(_TRANSITION_COLOR.get(prim, "#666"), 0.22)
+            tinted_bg = _tint(style["colour"], 0.22)
             self._scene.addRect(
                 QRectF(mid_x - chip_w / 2, mid_y, chip_w, chip_h),
                 QPen(color, 1),
@@ -154,7 +216,7 @@ class StateMachineDiagram(QGraphicsView):
             text.setPos(mid_x - len(label_text) * 3.2, mid_y - 2)
             self._label_specs.append({
                 "text": label_text,
-                "color": _TRANSITION_COLOR.get(prim, "#666"),
+                "color": style["colour"],
                 "chip": True,
             })
 

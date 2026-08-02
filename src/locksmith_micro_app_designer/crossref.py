@@ -129,6 +129,18 @@ def compute_crossrefs(doc: dict[str, Any]) -> CrossRefIndex:
             if via_workflow:
                 out[f"workflow:{via_workflow}"].append(CrossRef(surface, label, path))
 
+            # via_command / via_reaction are lists -- a transition may be
+            # driven by several commands or reactions at once (§6.3 driver
+            # list). Each declared id gets its own crossref so the command's
+            # or reaction's "Used by" panel shows this export's transition.
+            for command_id in transition.get("via_command") or []:
+                if command_id:
+                    out[f"command:{command_id}"].append(CrossRef(surface, label, path))
+
+            for reaction_id in transition.get("via_reaction") or []:
+                if reaction_id:
+                    out[f"reaction:{reaction_id}"].append(CrossRef(surface, label, path))
+
             condition_rule_ref = transition.get("condition_rule_ref")
             if condition_rule_ref:
                 out[f"rule:{condition_rule_ref}"].append(CrossRef(surface, label, path))

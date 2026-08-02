@@ -3,8 +3,9 @@
 
 Right-pane sections (canonical schema):
   Identity · Envelope summary · Schema SAID · TEL lifecycle (state
-  machine diagram; Task 14 re-keys its color coding off the transition
-  driver) · States list · Entry JSON · Used-by.
+  machine diagram + Transitions list, both keyed off the transition
+  driver -- via_command/via_reaction/via_workflow/automatic, Task 14)
+  · States list · Entry JSON · Used-by.
 """
 from __future__ import annotations
 
@@ -154,13 +155,13 @@ class _ExportSectionPane(QWidget):
         # Refresh diagram + Lifecycle tab content.
         lifecycle = entry.get("lifecycle") or {}
         transitions = [
-            # `tel_primitive` no longer exists on a transition -- the widget's
-            # `StateTransition.tel_primitive` field is a required placeholder
-            # until Task 14 re-keys the diagram off the transition driver.
             StateTransition(
                 from_state=t.get("from", ""),
                 to_state=t.get("to", ""),
-                tel_primitive="update",
+                via_command=t.get("via_command") or [],
+                via_reaction=t.get("via_reaction") or [],
+                via_workflow=t.get("via_workflow") or "",
+                trigger=t.get("trigger") or "",
             )
             for t in lifecycle.get("transitions", [])
         ]
@@ -283,11 +284,14 @@ class _ExportSectionPane(QWidget):
             row.addWidget(chip_from)
             row.addWidget(arrow)
             row.addWidget(chip_to)
-            via = t.get("via_workflow")
-            if via:
-                via_lbl = QLabel(f"via workflow {via}")
-                via_lbl.setStyleSheet("color:#0ABFB0;font-size:11px;")
-                row.addWidget(via_lbl)
+            driver_text = transition_driver_text(t)
+            driver_lbl = QLabel(driver_text)
+            driver_lbl.setStyleSheet(
+                "color:#E94B7B;font-size:11px;font-weight:600;"
+                if driver_text == "no driver (defect)"
+                else "color:#0ABFB0;font-size:11px;"
+            )
+            row.addWidget(driver_lbl)
             requires = [r.get("rule_ref", "") for r in (t.get("requires") or [])
                         if r.get("rule_ref")]
             if requires:
@@ -306,6 +310,36 @@ class _ExportSectionPane(QWidget):
             self._said_label.text(),
             self._description_label.text(),
         ])
+
+
+def transition_driver_text(transition: dict) -> str:
+    """Pure function: the Lifecycle tab's driver annotation for one
+    transition dict. Before this task the annotation covered only
+    `via_workflow` ("via ..."), so a transition driven solely by
+    `via_command`/`via_reaction`/`trigger: "automatic"` rendered with no
+    annotation at all -- an invisible driver, the same "legal shape renders
+    as blank" hazard `edge_style()` fixes for the diagram. Extended here to
+    all four driver kinds, combined in fixed order for the legal
+    multi-driver case (a licence suspended by a regulator command *or* on
+    premium lapse), with a distinct, non-blank text for the no-driver
+    defect (`missing_transition_driver`) rather than silence.
+    """
+    segments: list[str] = []
+    via_command = transition.get("via_command")
+    if via_command:
+        segments.append(f"via command {', '.join(via_command)}")
+    via_reaction = transition.get("via_reaction")
+    if via_reaction:
+        segments.append(f"via reaction {', '.join(via_reaction)}")
+    via_workflow = transition.get("via_workflow")
+    if via_workflow:
+        segments.append(f"via workflow {via_workflow}")
+    if transition.get("trigger") == "automatic":
+        segments.append("automatic")
+
+    if not segments:
+        return "no driver (defect)"
+    return " · ".join(segments)
 
 
 def _export_subtitle(exp: dict) -> str:
