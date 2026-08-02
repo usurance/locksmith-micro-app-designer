@@ -269,7 +269,7 @@
         {
           "required": ["kind", "imported_credential_id"],
           "additionalProperties": false,
-          "not": { "required": ["refuse", "present"] },
+          "not": { "required": ["refuse", "present"], "properties": { "refuse": { "const": true }, "present": { "const": true } } },
           "properties": {
             "kind": { "const": "credential" },
             "imported_credential_id": { "type": "string" },

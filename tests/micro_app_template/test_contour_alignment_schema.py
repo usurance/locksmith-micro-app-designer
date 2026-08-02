@@ -67,6 +67,36 @@ def test_presentation_of_a_held_credential_is_expressible():
                "present": True}, "exchange")
 
 
+def test_explicit_spurn_with_both_keys_stated_is_expressible():
+    # F1/R6: refuse/present exclusion must test TRUTH, not key PRESENCE.
+    # {refuse: true, present: false} is the unambiguous explicit spurn; a
+    # presence-keyed `not: {required: [refuse, present]}` wrongly rejects it
+    # because both keys are present, even though only one is true.
+    _validate({"kind": "credential", "imported_credential_id": "carrier_license",
+               "refuse": True, "present": False}, "exchange")
+
+
+def test_explicit_admit_with_both_keys_false_is_expressible():
+    # Same defect: the explicit default admit shape (both fields false,
+    # matching their documented `default: false`) must validate.
+    _validate({"kind": "credential", "imported_credential_id": "carrier_license",
+               "refuse": False, "present": False}, "exchange")
+
+
+def test_explicit_present_with_refuse_false_is_expressible():
+    # Same defect: a generator that writes every declared default alongside
+    # an explicit `present: true` must not be punished for spelling out the
+    # default.
+    _validate({"kind": "credential", "imported_credential_id": "carrier_license",
+               "refuse": False, "present": True}, "exchange")
+
+
+def test_exchange_still_rejects_refuse_and_present_both_true():
+    # The truth test must still forbid the actually-contradictory shape.
+    _rejects({"kind": "credential", "imported_credential_id": "carrier_license",
+              "refuse": True, "present": True}, "exchange")
+
+
 def test_exchange_rejects_the_outbound_verb():
     _rejects({"kind": "credential", "exported_credential_id": "x", "verb": "grant"}, "exchange")
 
