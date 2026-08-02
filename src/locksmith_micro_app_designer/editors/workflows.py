@@ -45,9 +45,6 @@ def _step_subtitle(s: dict) -> str:
         return f"command · {s['command_id']}"
     if s.get("reaction_id"):
         return f"reaction · {s['reaction_id']}"
-    adv = s.get("advance_lifecycle") or {}
-    if adv.get("credential_id"):
-        return f"advance {adv['credential_id']}"
     if s.get("expected_inbound"):
         inb = s["expected_inbound"][0]
         return f"{inb.get('trigger_type','?')} · {inb.get('route', '')}"
@@ -203,7 +200,6 @@ class _WorkflowSectionPane(QWidget):
             is_internal = (
                 not s.get("command_id")
                 and not s.get("reaction_id")
-                and not s.get("advance_lifecycle")
                 and not s.get("expected_inbound")
                 and not s.get("branches")
             )
@@ -252,13 +248,6 @@ class _WorkflowSectionPane(QWidget):
                 rx_lbl = QLabel(f"→ reaction {s['reaction_id']}")
                 rx_lbl.setStyleSheet("color:#0ABFB0;font-size:11px;")
                 row.addWidget(rx_lbl)
-            adv = s.get("advance_lifecycle") or {}
-            if adv.get("credential_id"):
-                a_lbl = QLabel(
-                    f"→ advance {adv['credential_id']} to {adv.get('to_state','?')}"
-                )
-                a_lbl.setStyleSheet("color:#0ABFB0;font-size:11px;")
-                row.addWidget(a_lbl)
             row.addStretch(1)
             self._steps_holder.addWidget(row_w)
 

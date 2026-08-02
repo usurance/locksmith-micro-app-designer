@@ -3,8 +3,8 @@
 
 Right-pane sections (canonical schema):
   Identity · Envelope summary · Schema SAID · TEL lifecycle (state
-  machine diagram color-coded by tel_primitive) · States list ·
-  Entry JSON · Used-by.
+  machine diagram; Task 14 re-keys its color coding off the transition
+  driver) · States list · Entry JSON · Used-by.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from typing import Any
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
+    QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -37,11 +37,15 @@ class _ExportSectionPane(QWidget):
     def __init__(self, crossrefs: CrossRefIndex, parent=None):
         super().__init__(parent=parent)
         self._crossrefs = crossrefs
+        self._role_id = "self"
         self.setObjectName("designer-section-pane")
         self.setStyleSheet(
             "#designer-section-pane QLabel{background:transparent;}"
         )
         self._build()
+
+    def set_role_id(self, role_id: str) -> None:
+        self._role_id = role_id
 
     def _build(self) -> None:
         from locksmith_micro_app_designer.widgets.editor_tab_bar import (
@@ -126,8 +130,9 @@ class _ExportSectionPane(QWidget):
         w.setProperty("holder", holder)
         lay.addWidget(holder)
         lay.addStretch(1)
-        # Non-Lifecycle tabs get a stub placeholder until later phases.
-        if name != "Lifecycle":
+        # Remaining tabs get a stub placeholder until later phases; Envelope
+        # is filled by _fill_envelope_tab (holder_role + self_issued).
+        if name not in ("Lifecycle", "Envelope"):
             stub = QLabel(f"({name} content — Phase 3b/3c follow-up)")
             stub.setStyleSheet("color:#aaa;font-style:italic;font-size:11px;")
             holder_lay.addWidget(stub)
@@ -149,10 +154,13 @@ class _ExportSectionPane(QWidget):
         # Refresh diagram + Lifecycle tab content.
         lifecycle = entry.get("lifecycle") or {}
         transitions = [
+            # `tel_primitive` no longer exists on a transition -- the widget's
+            # `StateTransition.tel_primitive` field is a required placeholder
+            # until Task 14 re-keys the diagram off the transition driver.
             StateTransition(
                 from_state=t.get("from", ""),
                 to_state=t.get("to", ""),
-                tel_primitive=t.get("tel_primitive", "update"),
+                tel_primitive="update",
             )
             for t in lifecycle.get("transitions", [])
         ]
@@ -169,9 +177,60 @@ class _ExportSectionPane(QWidget):
                     old.deleteLater()
         self._fill_lifecycle_tab(lifecycle_holder, entry)
 
+        # Refresh Envelope tab content.
+        envelope_holder = self._tab_widgets["Envelope"].property("holder")
+        env_holder_lay = envelope_holder.layout()
+        while env_holder_lay.count():
+            old = env_holder_lay.takeAt(0).widget()
+            if old is not None:
+                old.setParent(None)
+                old.deleteLater()
+        self._fill_envelope_tab(envelope_holder, entry)
+
         self.chip_strip.set_refs(
             self._crossrefs.consumers_of(f"export:{entry.get('id', '')}")
         )
+
+    def _fill_envelope_tab(self, holder: QFrame, entry: dict) -> None:
+        env = entry.get("envelope") or {}
+
+        # Holder role -- OPTIONAL. Absence is a legal untargeted-attestation
+        # shape (design spec §6.3, primitives-are-given AMENDMENT-WAVE BLOCK,
+        # 2026-08-02), not an omission, so it gets an explicit "none" choice
+        # rather than just rendering blank.
+        holder_row = QHBoxLayout()
+        holder_label = QLabel("Holder role:")
+        holder_label.setStyleSheet("color:#444;font-size:12px;")
+        holder_row.addWidget(holder_label)
+        holder_role = env.get("holder_role")
+        holder_chip = QLabel(holder_role or "(none — untargeted attestation)")
+        if holder_role:
+            holder_chip.setStyleSheet(
+                "background:#e8f4f4;color:#0a8a82;border-radius:9px;"
+                "padding:2px 9px;font-size:11px;font-weight:600;"
+            )
+        else:
+            holder_chip.setStyleSheet(
+                "color:#aaa;font-style:italic;font-size:11px;background:transparent;"
+            )
+        holder_row.addWidget(holder_chip)
+        holder_row.addStretch(1)
+        holder.layout().addLayout(holder_row)
+
+        # Self-issued -- valid only when holder_role equals this template's
+        # own role.id; otherwise the self-issued shape is indistinguishable
+        # from targeting another holder of the same role, so the checkbox is
+        # disabled rather than silently accepting a meaningless True.
+        is_own_role = bool(holder_role) and holder_role == self._role_id
+        self_issued_box = QCheckBox("Self-issued")
+        self_issued_box.setChecked(bool(env.get("self_issued")))
+        self_issued_box.setEnabled(is_own_role)
+        self_issued_box.setStyleSheet("font-size:11px;color:#444;")
+        if not is_own_role:
+            self_issued_box.setToolTip(
+                "Valid only when holder role equals this template's own role."
+            )
+        holder.layout().addWidget(self_issued_box)
 
     def _fill_lifecycle_tab(self, holder: QFrame, entry: dict) -> None:
         from locksmith_micro_app_designer.widgets.rule_chip_strip import (
@@ -237,12 +296,6 @@ class _ExportSectionPane(QWidget):
                 row.addWidget(req_lbl)
                 row.addWidget(RuleChipStrip(requires))
             row.addStretch(1)
-            prim_chip = QLabel(t.get("tel_primitive", ""))
-            prim_chip.setStyleSheet(
-                f"color:{_tel_color(t.get('tel_primitive', ''))};"
-                "font-size:10px;font-weight:600;background:transparent;"
-            )
-            row.addWidget(prim_chip)
             trans_section.layout().addLayout(row)
         holder.layout().addWidget(trans_section)
 
@@ -255,17 +308,15 @@ class _ExportSectionPane(QWidget):
         ])
 
 
-def _tel_color(prim: str) -> str:
-    return {"issue": "#D97757", "update": "#0ABFB0",
-            "revoke": "#E94B7B"}.get(prim, "#666")
-
-
 def _export_subtitle(exp: dict) -> str:
     env = exp.get("envelope") or {}
     lc = exp.get("lifecycle") or {}
     parts: list[str] = []
-    if env.get("holder_role"):
-        parts.append(f"→ {env['holder_role']}")
+    holder_role = env.get("holder_role")
+    if holder_role:
+        parts.append(f"→ {holder_role} (self)" if env.get("self_issued") else f"→ {holder_role}")
+    else:
+        parts.append("→ (untargeted)")
     states = lc.get("states") or []
     if states:
         parts.append(f"{len(states)} states")
@@ -309,6 +360,7 @@ class ExportsEditorPage(QWidget):
             parent=self,
         )
         self._pane = _ExportSectionPane(crossrefs=crossrefs)
+        self._pane.set_role_id(model.doc.get("role", {}).get("id", "self"))
         if items:
             self._pane.set_entry(model.doc["credentials"]["exports"][0])
         self.shell.set_right_pane(self._pane)

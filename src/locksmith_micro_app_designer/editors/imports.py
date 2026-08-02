@@ -93,6 +93,32 @@ class _ImportSectionPane(QWidget):
         self._said_section.layout().addWidget(self._said_label)
         lay.addWidget(self._said_section)
 
+        # Resolution — schema_path + exporter_template_said (2026-08-02,
+        # primitives-are-given): both optional, and together they close the
+        # gap that left an imported credential's targetedness and state
+        # alphabet unresolvable from `imports[]` alone (design spec §6.3).
+        res_row = QHBoxLayout()
+        res_row.setSpacing(14)
+        self._schema_path_section = make_section("Schema path")
+        self._schema_path_label = QLabel("(unset)")
+        self._schema_path_label.setFont(mono)
+        self._schema_path_label.setStyleSheet(
+            "color:#444;background:#f6f7f9;border-radius:4px;"
+            "padding:6px 8px;"
+        )
+        self._schema_path_section.layout().addWidget(self._schema_path_label)
+        res_row.addWidget(self._schema_path_section, 1)
+        self._exporter_said_section = make_section("Exporter template SAID")
+        self._exporter_said_label = QLabel("(unset)")
+        self._exporter_said_label.setFont(mono)
+        self._exporter_said_label.setStyleSheet(
+            "color:#444;background:#f6f7f9;border-radius:4px;"
+            "padding:6px 8px;"
+        )
+        self._exporter_said_section.layout().addWidget(self._exporter_said_label)
+        res_row.addWidget(self._exporter_said_section, 1)
+        lay.addLayout(res_row)
+
         # Issuer + lifecycle side-by-side.
         ir_row = QHBoxLayout()
         ir_row.setSpacing(14)
@@ -136,6 +162,8 @@ class _ImportSectionPane(QWidget):
         )
         self._narrative_label.setText(narrative)
         self._said_label.setText(entry.get("expected_schema_said") or "(unset)")
+        self._schema_path_label.setText(entry.get("schema_path") or "(unset)")
+        self._exporter_said_label.setText(entry.get("exporter_template_said") or "(unset)")
         issuer = entry.get("expected_issuer_role")
         if issuer:
             self._issuer_chip.setText(issuer)

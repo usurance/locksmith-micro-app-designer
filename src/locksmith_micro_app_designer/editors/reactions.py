@@ -11,12 +11,12 @@ from typing import Any
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget,
 )
 
 from locksmith_micro_app_designer.crossref import CrossRefIndex
 from locksmith_micro_app_designer.editors._shared import (
-    kind_color_for, make_section,
+    derive_exchange_verb, kind_color_for, make_section,
 )
 from locksmith_micro_app_designer.model import TemplateModel
 from locksmith_micro_app_designer.widgets.cross_ref_chip import CrossRefChipStrip
@@ -41,15 +41,15 @@ def _reaction_subtitle(r: dict) -> str:
 
 _EMISSION_KIND_COLOR: dict[str, str] = {
     "aggregate_event":   "#A36AE6",
-    "lifecycle_advance": "#0ABFB0",
     "exchange":          "#D97757",
 }
 
 
 class _ReactionSectionPane(QWidget):
-    def __init__(self, crossrefs: CrossRefIndex, parent=None):
+    def __init__(self, crossrefs: CrossRefIndex, model: TemplateModel, parent=None):
         super().__init__(parent=parent)
         self._crossrefs = crossrefs
+        self._model = model
         self.setObjectName("designer-section-pane")
         self.setStyleSheet(
             "#designer-section-pane QLabel{background:transparent;}"
@@ -105,6 +105,14 @@ class _ReactionSectionPane(QWidget):
         self._trigger_route_row = QHBoxLayout()
         self._trigger_section.layout().addLayout(self._trigger_route_row)
         lay.addWidget(self._trigger_section)
+
+        # Mints — names an exports[].id this reaction produces an instance
+        # of (§6.4/§6.6's derived-anchoring-act field). Selector,
+        # display-only for now like this codebase's other pickers.
+        self._mints_section = make_section("Mints credential")
+        self._mints_combo = QComboBox()
+        self._mints_section.layout().addWidget(self._mints_combo)
+        lay.addWidget(self._mints_section)
 
         # Emissions.
         self._emissions_section = make_section("Emissions")
@@ -171,6 +179,19 @@ class _ReactionSectionPane(QWidget):
             self._trigger_route_row.addWidget(s_lbl)
         self._trigger_route_row.addStretch(1)
 
+        export_ids = [
+            e.get("id", "")
+            for e in (self._model.doc.get("credentials", {}).get("exports", [])
+                      if self._model is not None else [])
+        ]
+        self._mints_combo.blockSignals(True)
+        self._mints_combo.clear()
+        self._mints_combo.addItem("(none)")
+        self._mints_combo.addItems(export_ids)
+        mints = entry.get("mints_credential_id")
+        self._mints_combo.setCurrentText(mints if mints in export_ids else "(none)")
+        self._mints_combo.blockSignals(False)
+
         while self._emissions_holder.count():
             item = self._emissions_holder.takeAt(0)
             w = item.widget() if item is not None else None
@@ -195,17 +216,27 @@ class _ReactionSectionPane(QWidget):
                     f"append to {em.get('aggregate_id','?')} as "
                     f"{em.get('event_type','?')}"
                 ))
-            elif kind == "lifecycle_advance":
-                row.addWidget(QLabel(
-                    f"advance {em.get('exported_credential_id','?')} → "
-                    f"{em.get('to_state','?')}"
-                ))
             elif kind == "exchange":
                 ex = em.get("exchange") or {}
+                if ex.get("kind") == "credential":
+                    verb_or_pattern = derive_exchange_verb(ex)
+                else:
+                    verb_or_pattern = ex.get("pattern", "")
                 row.addWidget(QLabel(
-                    f"exchange: {ex.get('kind','?')} · "
-                    f"{ex.get('verb', ex.get('pattern',''))}"
+                    f"exchange: {ex.get('kind','?')} · {verb_or_pattern}"
                 ))
+                # refuse/present are only meaningful on the imported-exchange
+                # branch (§6.4) -- display-only, mutually exclusive per the
+                # meta-schema's `not: {required: [refuse, present]}`.
+                if ex.get("kind") == "credential" and ex.get("imported_credential_id"):
+                    refuse_box = QCheckBox("refuse")
+                    refuse_box.setChecked(bool(ex.get("refuse")))
+                    refuse_box.setStyleSheet("font-size:10px;color:#666;")
+                    row.addWidget(refuse_box)
+                    present_box = QCheckBox("present")
+                    present_box.setChecked(bool(ex.get("present")))
+                    present_box.setStyleSheet("font-size:10px;color:#666;")
+                    row.addWidget(present_box)
             row.addStretch(1)
             self._emissions_holder.addWidget(row_w)
 
@@ -277,7 +308,7 @@ class ReactionsEditorPage(QWidget):
             is_valid=True,
             parent=self,
         )
-        self._pane = _ReactionSectionPane(crossrefs=crossrefs)
+        self._pane = _ReactionSectionPane(crossrefs=crossrefs, model=model)
         if items:
             self._pane.set_entry(model.doc["reactions"][0])
         self.shell.set_right_pane(self._pane)

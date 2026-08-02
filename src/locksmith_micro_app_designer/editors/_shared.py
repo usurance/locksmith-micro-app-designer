@@ -24,6 +24,32 @@ def kind_color_for(role_kind: str) -> str:
     return _ROLE_KIND_COLORS.get(role_kind, "#888888")
 
 
+def derive_exchange_verb(exchange: dict[str, Any]) -> str:
+    """The IPEX verb an outbound `$defs/exchange` credential object derives to
+    (authoring spec §6.4, primitives-are-given AMENDMENT-WAVE BLOCK, 2026-08-02).
+    `verb` no longer exists on the outbound side -- it is computed from which
+    credential-id slot is set and, on the inbound branch, the `refuse`/`present`
+    flags. Shared between commands.py and reactions.py, whose emission lists
+    render the same `$defs/exchange` shape.
+
+    | Emission carries                          | Derives to |
+    |--------------------------------------------|------------|
+    | `exported_credential_id`                   | `grant`    |
+    | `imported_credential_id`, `present: true`   | `grant`    |
+    | `imported_credential_id`, `refuse: true`    | `spurn`    |
+    | `imported_credential_id`, neither           | `admit`    |
+    """
+    if exchange.get("exported_credential_id"):
+        return "grant"
+    if exchange.get("imported_credential_id"):
+        if exchange.get("refuse"):
+            return "spurn"
+        if exchange.get("present"):
+            return "grant"
+        return "admit"
+    return "?"
+
+
 def make_section(title: str) -> QFrame:
     """A right-pane section: uppercase teal label + content, no card chrome.
 

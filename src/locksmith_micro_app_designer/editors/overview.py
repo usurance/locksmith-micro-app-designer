@@ -50,8 +50,14 @@ def _qualifier_for_export(entry: dict) -> str | None:
     env = entry.get("envelope", {})
     lc = entry.get("lifecycle", {})
     bits: list[str] = []
-    if env.get("holder_role"):
-        bits.append(f"to {env['holder_role']}")
+    holder_role = env.get("holder_role")
+    if holder_role:
+        # holder_role is OPTIONAL (design spec §6.3, primitives-are-given,
+        # 2026-08-02) -- absence is a legal untargeted attestation, not an
+        # omission, so present is worth distinguishing self-issued too.
+        bits.append(f"to {holder_role} (self)" if env.get("self_issued") else f"to {holder_role}")
+    else:
+        bits.append("untargeted")
     if lc.get("states"):
         bits.append(f"{len(lc['states'])} states")
     if entry.get("schema"):

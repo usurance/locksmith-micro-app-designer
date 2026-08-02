@@ -13,12 +13,13 @@ from typing import Any
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
+    QPlainTextEdit, QVBoxLayout, QWidget,
 )
 
 from locksmith_micro_app_designer.crossref import CrossRefIndex
 from locksmith_micro_app_designer.editors._shared import (
-    kind_color_for, make_section,
+    derive_exchange_verb, kind_color_for, make_section,
 )
 from locksmith_micro_app_designer.model import TemplateModel
 from locksmith_micro_app_designer.widgets.cross_ref_chip import CrossRefChipStrip
@@ -34,7 +35,7 @@ def _emission_summary(em: dict[str, Any]) -> str:
         ex = em.get("exchange", {})
         ek = ex.get("kind", "?")
         if ek == "credential":
-            verb = ex.get("verb", "?")
+            verb = derive_exchange_verb(ex)
             imp = ex.get("imported_credential_id")
             exp = ex.get("exported_credential_id")
             target = f"imp:{imp}" if imp else (f"exp:{exp}" if exp else "")
@@ -42,10 +43,6 @@ def _emission_summary(em: dict[str, Any]) -> str:
         if ek == "message":
             return f"exchange/message {ex.get('pattern', '?')} {ex.get('route', '?')}"
         return f"exchange/{ek}"
-    if kind == "lifecycle_advance":
-        return (f"lifecycle_advance: "
-                f"{em.get('exported_credential_id', '?')} → "
-                f"{em.get('to_state', '?')}")
     if kind == "aggregate_event":
         return (f"aggregate_event: {em.get('aggregate_id', '?')} ← "
                 f"{em.get('event_type', '?')}")
@@ -53,9 +50,10 @@ def _emission_summary(em: dict[str, Any]) -> str:
 
 
 class _CommandSectionPane(QWidget):
-    def __init__(self, crossrefs: CrossRefIndex, parent=None):
+    def __init__(self, crossrefs: CrossRefIndex, model: TemplateModel, parent=None):
         super().__init__(parent=parent)
         self._crossrefs = crossrefs
+        self._model = model
         # Defense in depth: every QLabel inside this pane renders
         # transparent. Without this, macOS Qt paints labels with the
         # system Window palette fill, defeating the global QLabel rule
@@ -121,6 +119,15 @@ class _CommandSectionPane(QWidget):
         targets.layout().addLayout(self._cp_row)
         lay.addWidget(targets)
 
+        # MINTS — names an exports[].id this command produces an instance of
+        # (§6.4's derived-anchoring-act field; replaces the removed
+        # advance-the-lifecycle emission kind). Selector, display-only for
+        # now like this codebase's other pickers (e.g. ViewTypeChipPicker).
+        self._mints_section = make_section("Mints credential")
+        self._mints_combo = QComboBox()
+        self._mints_section.layout().addWidget(self._mints_combo)
+        lay.addWidget(self._mints_section)
+
         # PAYLOAD
         self._payload_section = make_section("What the actor supplies (payload)")
         self._payload_holder = QFrame()
@@ -184,6 +191,19 @@ class _CommandSectionPane(QWidget):
                 "color:#aaa;font-style:italic;font-size:11px;background:transparent;"
             )
 
+        export_ids = [
+            e.get("id", "")
+            for e in (self._model.doc.get("credentials", {}).get("exports", [])
+                      if self._model is not None else [])
+        ]
+        self._mints_combo.blockSignals(True)
+        self._mints_combo.clear()
+        self._mints_combo.addItem("(none)")
+        self._mints_combo.addItems(export_ids)
+        mints = entry.get("mints_credential_id")
+        self._mints_combo.setCurrentText(mints if mints in export_ids else "(none)")
+        self._mints_combo.blockSignals(False)
+
         ph_layout = self._payload_holder.layout()
         while ph_layout.count():
             old = ph_layout.takeAt(0).widget()
@@ -218,10 +238,30 @@ class _CommandSectionPane(QWidget):
             self._emissions_holder.addWidget(none_lbl)
         else:
             for em in emissions:
+                row_w = QFrame()
+                row = QHBoxLayout(row_w)
+                row.setContentsMargins(0, 2, 0, 2)
+                row.setSpacing(8)
                 summary = _emission_summary(em)
                 lbl = QLabel(f"• {summary}")
                 lbl.setStyleSheet("color:#444;font-size:11px;")
-                self._emissions_holder.addWidget(lbl)
+                row.addWidget(lbl)
+                # refuse/present are only meaningful on the imported-exchange
+                # branch (§6.4) — display-only, mutually exclusive per the
+                # meta-schema's `not: {required: [refuse, present]}`.
+                exchange = em.get("exchange") or {}
+                if (em.get("kind") == "exchange" and exchange.get("kind") == "credential"
+                        and exchange.get("imported_credential_id")):
+                    refuse_box = QCheckBox("refuse")
+                    refuse_box.setChecked(bool(exchange.get("refuse")))
+                    refuse_box.setStyleSheet("font-size:10px;color:#666;")
+                    row.addWidget(refuse_box)
+                    present_box = QCheckBox("present")
+                    present_box.setChecked(bool(exchange.get("present")))
+                    present_box.setStyleSheet("font-size:10px;color:#666;")
+                    row.addWidget(present_box)
+                row.addStretch(1)
+                self._emissions_holder.addWidget(row_w)
 
         key = f"command:{entry.get('id', '')}"
         self.chip_strip.set_refs(self._crossrefs.consumers_of(key))
@@ -287,7 +327,7 @@ class CommandsEditorPage(QWidget):
             is_valid=True,
             parent=self,
         )
-        self._pane = _CommandSectionPane(crossrefs=crossrefs)
+        self._pane = _CommandSectionPane(crossrefs=crossrefs, model=model)
         if items:
             self._pane.set_entry(model.doc.get("commands", [{}])[0])
         self.shell.set_right_pane(self._pane)

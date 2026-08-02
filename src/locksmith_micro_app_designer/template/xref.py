@@ -101,19 +101,20 @@ def validate_xrefs(doc: dict[str, Any]) -> list[XrefError]:
                         path=f"commands[{i}].{kind}[{j}].rule_ref",
                         reference=rr, target_type="rule",
                     ))
-        # commands[].emissions: lifecycle_advance.exported_credential_id and aggregate_event.aggregate_id
+        # commands[].mints_credential_id (replaces the removed advance-lifecycle
+        # emission kind's exported_credential_id -- §6.4's derived-anchoring-act field)
+        mints = cmd.get("mints_credential_id")
+        if mints is not None and mints not in export_ids:
+            errors.append(XrefError(
+                path=f"commands[{i}].mints_credential_id",
+                reference=mints, target_type="credentials.exports",
+            ))
+        # commands[].emissions: aggregate_event.aggregate_id
         for j, em in enumerate(cmd.get("emissions", []) or []):
             if not isinstance(em, dict):
                 continue
             kind = em.get("kind")
-            if kind == "lifecycle_advance":
-                cid = em.get("exported_credential_id")
-                if cid is not None and cid not in export_ids:
-                    errors.append(XrefError(
-                        path=f"commands[{i}].emissions[{j}].exported_credential_id",
-                        reference=cid, target_type="credentials.exports",
-                    ))
-            elif kind == "aggregate_event":
+            if kind == "aggregate_event":
                 aid = em.get("aggregate_id")
                 if aid is not None and aid not in aggregate_ids:
                     errors.append(XrefError(
@@ -140,18 +141,18 @@ def validate_xrefs(doc: dict[str, Any]) -> list[XrefError]:
                         path=f"reactions[{i}].trigger.exported_credential_id",
                         reference=cid, target_type="credentials.exports",
                     ))
+        # reactions[].mints_credential_id (same field, reaction surface)
+        rx_mints = rx.get("mints_credential_id")
+        if rx_mints is not None and rx_mints not in export_ids:
+            errors.append(XrefError(
+                path=f"reactions[{i}].mints_credential_id",
+                reference=rx_mints, target_type="credentials.exports",
+            ))
         for j, em in enumerate(rx.get("emissions", []) or []):
             if not isinstance(em, dict):
                 continue
             kind = em.get("kind")
-            if kind == "lifecycle_advance":
-                cid = em.get("exported_credential_id")
-                if cid is not None and cid not in export_ids:
-                    errors.append(XrefError(
-                        path=f"reactions[{i}].emissions[{j}].exported_credential_id",
-                        reference=cid, target_type="credentials.exports",
-                    ))
-            elif kind == "aggregate_event":
+            if kind == "aggregate_event":
                 aid = em.get("aggregate_id")
                 if aid is not None and aid not in aggregate_ids:
                     errors.append(XrefError(

@@ -130,7 +130,14 @@ def compliant_template_dir(tmp_path, minimal_valid_template):
             "name": "Test Credential",
             "description": "Minimal exported credential for lint tests.",
             "envelope": {
+                # holder_role equals the fixture's own role.id ("tester") --
+                # self_issued: true disambiguates this from targeting another
+                # holder of the same role (design spec §6.3, primitives-are-
+                # given, 2026-08-02: "without it the self-issued shape is
+                # indistinguishable from targeting another holder of my own
+                # role").
                 "holder_role": "tester",
+                "self_issued": True,
                 "verifier_roles": ["tester"],
                 "edges": [],
                 "disclosure_mode": "full",

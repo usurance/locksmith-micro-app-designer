@@ -65,10 +65,6 @@ def _walk_emissions(
                 out[f"export:{exported_id}"].append(CrossRef(surface, label, path))
             if schema_said:
                 out[f"schema:{schema_said}"].append(CrossRef(surface, label, path))
-        elif kind == "lifecycle_advance":
-            exported_id = emission.get("exported_credential_id")
-            if exported_id:
-                out[f"export:{exported_id}"].append(CrossRef(surface, label, path))
         elif kind == "aggregate_event":
             aggregate_id = emission.get("aggregate_id")
             if aggregate_id:
@@ -99,6 +95,12 @@ def compute_crossrefs(doc: dict[str, Any]) -> CrossRefIndex:
                 rule_ref = precond.get("rule_ref")
                 if rule_ref:
                     out[f"rule:{rule_ref}"].append(CrossRef(surface, label, path))
+
+        # mints_credential_id (replaces the removed advance-lifecycle
+        # emission kind's exported_credential_id as the export's producer link)
+        mints = command.get("mints_credential_id")
+        if mints:
+            out[f"export:{mints}"].append(CrossRef(surface, label, path))
 
         # emissions
         _walk_emissions(command.get("emissions") or [], surface, label, path, out)
@@ -176,12 +178,6 @@ def compute_crossrefs(doc: dict[str, Any]) -> CrossRefIndex:
             if reaction_id:
                 out[f"reaction:{reaction_id}"].append(CrossRef(surface, label, path))
 
-            advance_lifecycle = step.get("advance_lifecycle")
-            if advance_lifecycle:
-                cred_id = advance_lifecycle.get("credential_id")
-                if cred_id:
-                    out[f"export:{cred_id}"].append(CrossRef(surface, label, path))
-
             for expected in step.get("expected_inbound") or []:
                 import_id = expected.get("imported_credential_id")
                 if import_id:
@@ -207,6 +203,11 @@ def compute_crossrefs(doc: dict[str, Any]) -> CrossRefIndex:
         export_id = trigger.get("exported_credential_id")
         if export_id:
             out[f"export:{export_id}"].append(CrossRef(surface, label, path))
+
+        # mints_credential_id (same field, reaction surface)
+        rx_mints = reaction.get("mints_credential_id")
+        if rx_mints:
+            out[f"export:{rx_mints}"].append(CrossRef(surface, label, path))
 
         _walk_emissions(reaction.get("emissions") or [], surface, label, path, out)
 

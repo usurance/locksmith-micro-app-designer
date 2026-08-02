@@ -133,7 +133,7 @@ from locksmith_micro_app_designer.template.xref import validate_xrefs
                 "envelope": {"holder_role": "r", "verifier_roles": [], "edges": [], "disclosure_mode": "full"},
                 "schema": {"schema_said": "E" + "x" * 43, "schema_path": "schemas/c.json"},
                 "lifecycle": {"states": ["a"], "initial": "a", "transitions": [
-                    {"id": "t1", "from": "a", "to": "a", "tel_primitive": "issue", "via_workflow": "missing-workflow"}
+                    {"id": "t1", "from": "a", "to": "a", "via_workflow": "missing-workflow"}
                 ]},
                 "rule_refs": [],
                 "value_flow": {"implied_credentials": []},
@@ -211,17 +211,31 @@ from locksmith_micro_app_designer.template.xref import validate_xrefs
         },
         "missing-rule",
     ),
-    # command emission lifecycle_advance exported_credential_id
+    # command mints_credential_id (replaces the removed advance-lifecycle
+    # emission kind's exported_credential_id -- §6.4's derived-anchoring-act field)
     (
         {
             "credentials": {"imports": [], "exports": []},
             "commands": [{
                 "id": "c1", "name": "c", "description": "c", "route": "/x/cmd/c",
-                "payload_schema": {}, "idempotency_key_expression": "hash(p)",
-                "emissions": [{"kind": "lifecycle_advance", "exported_credential_id": "missing-export", "to_state": "active"}],
+                "payload_schema": {}, "mints_credential_id": "missing-export",
+                "emissions": [],
             }],
         },
         "missing-export",
+    ),
+    # reaction mints_credential_id (same field, reaction surface)
+    (
+        {
+            "credentials": {"imports": [], "exports": []},
+            "reactions": [{
+                "id": "r1", "description": "r",
+                "trigger": {"type": "scheduled", "cadence": "* * * * *"},
+                "mints_credential_id": "missing-export-2",
+                "emissions": [],
+            }],
+        },
+        "missing-export-2",
     ),
     # command emission aggregate_event aggregate_id
     (
@@ -269,6 +283,28 @@ def test_credentials_fixture_validates(fixtures_dir):
     assert errors == [], f"unexpected: {[e.message for e in errors]}"
 
 
+def test_credentials_fixture_exports_all_three_targetedness_shapes(fixtures_dir):
+    """The fixture is authored to exercise all three shapes the design spec's
+    table names (§6.3, AMENDMENT-WAVE BLOCK, primitives-are-given): targeted at
+    another, self-issued, and untargeted. `holder_role` absence is a legal
+    shape, not an omission -- pin that the fixture actually carries one of
+    each rather than asserting it only indirectly via the whole-doc validate."""
+    import json
+    with open(fixtures_dir / "credentials_valid.json") as f:
+        doc = json.load(f)
+    exports = {e["id"]: e for e in doc["credentials"]["exports"]}
+    targeted_at_another = exports["policy"]["envelope"]
+    assert targeted_at_another.get("holder_role") == "policyholder_individual"
+    assert targeted_at_another.get("self_issued", False) is False
+
+    untargeted = exports["solvency_attestation"]["envelope"]
+    assert "holder_role" not in untargeted
+
+    self_issued = exports["carrier_self_certification"]["envelope"]
+    assert self_issued.get("holder_role") == doc["role"]["id"]
+    assert self_issued.get("self_issued") is True
+
+
 def test_invalid_edge_operator_fails(fixtures_dir):
     import json
     with open(fixtures_dir / "credentials_valid.json") as f:
@@ -287,15 +323,6 @@ def test_invalid_disclosure_mode_fails(fixtures_dir):
     assert any("disclosure_mode" in e.path or "secret" in e.message for e in errors)
 
 
-def test_invalid_tel_primitive_fails(fixtures_dir):
-    import json
-    with open(fixtures_dir / "credentials_valid.json") as f:
-        doc = json.load(f)
-    doc["credentials"]["exports"][0]["lifecycle"]["transitions"][0]["tel_primitive"] = "delete"
-    errors = validate_against_meta_schema(doc, META_SCHEMA)
-    assert any("tel_primitive" in e.path or "delete" in e.message for e in errors)
-
-
 def test_schema_path_must_be_in_schemas_dir(fixtures_dir):
     import json
     with open(fixtures_dir / "credentials_valid.json") as f:
@@ -306,6 +333,12 @@ def test_schema_path_must_be_in_schemas_dir(fixtures_dir):
 
 
 def test_command_with_credential_emission_validates(minimal_valid_template):
+    """The outbound-`verb` shape this test used to author (slotless apply,
+    neither credential id set) is the one the owner ruled unwriteable in this
+    profile (Task 4, 2026-08-02 ruling) -- outbound `verb` is derived, not
+    authored, and a slotless exchange has no row in the derivation table. The
+    current shape: the command declares `mints_credential_id` and its
+    emission carries `exported_credential_id`, which derives to `grant`."""
     minimal_valid_template["commands"].append({
         "id": "submit_app",
         "name": "Submit Application",
@@ -319,14 +352,13 @@ def test_command_with_credential_emission_validates(minimal_valid_template):
         "auth_preconditions": [],
         "state_preconditions": [],
         "temporal_preconditions": [],
+        "mints_credential_id": "carrier_license_application",
         "emissions": [
             {
                 "kind": "exchange",
                 "exchange": {
                     "kind": "credential",
-                    "verb": "apply",
-                    "imported_credential_id": None,
-                    "exported_credential_id": None,
+                    "exported_credential_id": "carrier_license_application",
                     "schema_said_referenced": "EAbc0000000000000000000000000000000000000000"
                 }
             }
@@ -422,6 +454,9 @@ def test_invalid_log_scope_fails(minimal_valid_template):
 
 
 def test_reaction_validates(minimal_valid_template):
+    """`verb` is derived on the outbound side; an inbound-branch exchange
+    declaring neither `refuse` nor `present` derives to `admit` (§6.4's
+    derivation table), so dropping the field is the like-for-like fix."""
     minimal_valid_template["reactions"].append({
         "id": "on_license_granted",
         "description": "Admit incoming license credential.",
@@ -435,7 +470,6 @@ def test_reaction_validates(minimal_valid_template):
                 "kind": "exchange",
                 "exchange": {
                     "kind": "credential",
-                    "verb": "admit",
                     "imported_credential_id": "carrier_license"
                 }
             }

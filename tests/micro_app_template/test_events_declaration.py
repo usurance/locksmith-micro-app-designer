@@ -315,15 +315,47 @@ _CORPUS_PARAMS = [
 ]
 
 
+#: What the primitives-are-given meta-schema (this repo's Task 4, 2026-08-02) reports
+#: against each landed, non-DESCOPED bundle TODAY. All five corpus bundles -- these
+#: three included -- are being deleted and re-authored through the new KERI-shape pass
+#: (owner ruling 2026-07-31, ugard `backlog/2026-07-31-delete-and-reauthor-the-ipc-corpus.md`);
+#: repairing them here is out of scope for the whole plan this test file's changes belong
+#: to (`docs/superpowers/plans/2026-08-02-keri-primitive-contour-alignment.md`). Unlike the
+#: two DESCOPED bundles above, these three are not blocked on a narrower redesign item and
+#: are not yet known-broken for a *different* reason (`payload_mapping`) -- they are already
+#: at `micro-app-template/0.2` and fail on exactly the three surfaces this meta-schema wave
+#: removed (the credential-lifecycle-transition state-primitive field, the outbound exchange
+#: verb, and the advance-the-lifecycle emission kind), so an `errors == []` assertion is the
+#: wrong shape for them now. Mirrors the identical re-pin concierge-api's Task 12 did to
+#: `tests/cli/test_emission_bindings_calibration.py`'s `EXPECTED_ERROR_COUNT` map for
+#: these same three bundles -- same date, same reasoning, same numbers. Assertion is
+#: `==`, so it catches a regression (count rises) AND a silent over-fix (count falls)
+#: equally; when a bundle is re-authored and either drops out of CORPUS_BUNDLES or
+#: validates cleanly, delete its row.
+EXPECTED_ERROR_COUNT = {
+    "carrier-license-application": 3,
+    "product-designer-publishes-product-version": 16,
+    "regulator-grants-carrier-license": 10,
+}
+
+
 @pytest.mark.skipif(not CORPUS.is_dir(), reason="ugard corpus not checked out")
 @pytest.mark.parametrize("bundle", _CORPUS_PARAMS)
 def test_landed_corpus_still_validates(bundle):
-    """The widening must not regress the landed bundles."""
+    """The widening must not regress the landed bundles.
+
+    Non-DESCOPED bundles are checked against `EXPECTED_ERROR_COUNT`, dated
+    2026-08-02, rather than "zero errors" -- see the map's docstring for why.
+    """
     path = CORPUS / bundle / "micro-app-template.json"
     assert path.is_file(), f"missing bundle: {path} (corpus at {CORPUS})"
     validator = jsonschema.Draft202012Validator(SCHEMA)
     errors = list(validator.iter_errors(json.loads(path.read_text())))
-    assert not errors, f"{bundle}: {[e.message for e in errors]}"
+    expected = EXPECTED_ERROR_COUNT.get(bundle, 0)
+    assert len(errors) == expected, (
+        f"{bundle}: expected {expected} errors, got {len(errors)}: "
+        f"{[e.message for e in errors]}"
+    )
 
 
 @pytest.mark.skipif(not CORPUS.is_dir(), reason="ugard corpus not checked out")
