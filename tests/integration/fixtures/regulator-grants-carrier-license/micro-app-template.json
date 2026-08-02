@@ -633,17 +633,10 @@
         {
           "exchange": {
             "exported_credential_id": "carrier_license",
-            "imported_credential_id": null,
             "kind": "credential",
-            "schema_said_referenced": "EOBjUL6H9FQdr_PlXVU_cv_iaXdK5Pg8L3M2YQrnHivI",
-            "verb": "grant"
+            "schema_said_referenced": "EOBjUL6H9FQdr_PlXVU_cv_iaXdK5Pg8L3M2YQrnHivI"
           },
           "kind": "exchange"
-        },
-        {
-          "exported_credential_id": "carrier_license",
-          "kind": "lifecycle_advance",
-          "to_state": "active"
         },
         {
           "aggregate_id": "license_registry",
@@ -652,6 +645,7 @@
         }
       ],
       "id": "grant_license",
+      "mints_credential_id": "carrier_license",
       "name": "Grant carrier license",
       "payload_schema": {
         "additionalProperties": false,
@@ -738,11 +732,10 @@
       "emissions": [
         {
           "exchange": {
-            "exported_credential_id": null,
             "imported_credential_id": "carrier_license_application",
             "kind": "credential",
-            "schema_said_referenced": "EBSxJSWpGHcTyBYOreTj1NKBudwU5xHPA8pw003XCTDc",
-            "verb": "spurn"
+            "refuse": true,
+            "schema_said_referenced": "EBSxJSWpGHcTyBYOreTj1NKBudwU5xHPA8pw003XCTDc"
           },
           "kind": "exchange"
         },
@@ -793,11 +786,6 @@
       "description": "Temporarily put an active carrier_license into a suspended state. The license is not revoked; the carrier may seek reinstatement once grounds are cleared.",
       "emissions": [
         {
-          "exported_credential_id": "carrier_license",
-          "kind": "lifecycle_advance",
-          "to_state": "suspended"
-        },
-        {
           "aggregate_id": "license_registry",
           "event_type": "license_suspended",
           "kind": "aggregate_event"
@@ -845,11 +833,6 @@
       "description": "Move a suspended carrier_license back to active. Requires the suspension_grounds_cleared rule to evaluate true.",
       "emissions": [
         {
-          "exported_credential_id": "carrier_license",
-          "kind": "lifecycle_advance",
-          "to_state": "active"
-        },
-        {
           "aggregate_id": "license_registry",
           "event_type": "license_reinstated",
           "kind": "aggregate_event"
@@ -890,11 +873,6 @@
       "counterparty_role": "carrier",
       "description": "Permanently invalidate a carrier_license. Fires a TEL revocation event; the credential cannot be reinstated after revocation.",
       "emissions": [
-        {
-          "exported_credential_id": "carrier_license",
-          "kind": "lifecycle_advance",
-          "to_state": "revoked"
-        },
         {
           "aggregate_id": "license_registry",
           "event_type": "license_revoked",
@@ -976,16 +954,20 @@
                   "rule_ref": "financial_solvency_demonstrated"
                 }
               ],
-              "tel_primitive": "issue",
               "to": "active",
-              "trigger": "manual"
+              "trigger": "manual",
+              "via_command": [
+                "grant_license"
+              ]
             },
             {
               "from": "active",
               "id": "suspend",
-              "tel_primitive": "update",
               "to": "suspended",
-              "trigger": "manual"
+              "trigger": "manual",
+              "via_command": [
+                "suspend_license"
+              ]
             },
             {
               "from": "suspended",
@@ -995,9 +977,11 @@
                   "rule_ref": "suspension_grounds_cleared"
                 }
               ],
-              "tel_primitive": "update",
               "to": "active",
-              "trigger": "manual"
+              "trigger": "manual",
+              "via_command": [
+                "reinstate_license"
+              ]
             },
             {
               "from": [
@@ -1005,9 +989,11 @@
                 "suspended"
               ],
               "id": "revoke",
-              "tel_primitive": "revoke",
               "to": "revoked",
-              "trigger": "manual"
+              "trigger": "manual",
+              "via_command": [
+                "revoke_license"
+              ]
             }
           ]
         },
@@ -1041,13 +1027,13 @@
       }
     ]
   },
-  "d": "ENedII_v-ENQneBEFzTSt_6mpPlhMBZc7dN7WmD-DvXr",
+  "d": "EDWlIJawwx8s_FeBvavtPDAvZrvC64WJL4z5cLhqSg0U",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",
     "expression_language": "CEL/1.0",
     "id": "regulator-grants-carrier-license",
-    "version": "1.2"
+    "version": "1.3"
   },
   "projections": [
     {
@@ -1613,6 +1599,13 @@
         },
         {
           "actor": "counterparty",
+          "expected_inbound": [
+            {
+              "ipex_verb": "admit",
+              "on_match": "next_step:step_grant_admitted",
+              "trigger_type": "credential_received"
+            }
+          ],
           "id": "step_await_admit",
           "name": "Await carrier admit (or spurn) of granted credential",
           "next_steps": [],
@@ -1620,6 +1613,12 @@
             "duration": "P30D",
             "on_expiry": "step_grant_lapsed"
           }
+        },
+        {
+          "actor": "self",
+          "id": "step_grant_admitted",
+          "name": "Carrier admitted the granted license",
+          "next_steps": []
         },
         {
           "actor": "self",

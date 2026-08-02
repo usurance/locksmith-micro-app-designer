@@ -317,17 +317,10 @@
         {
           "exchange": {
             "exported_credential_id": "carrier_license_application",
-            "imported_credential_id": null,
             "kind": "credential",
-            "schema_said_referenced": "EBSxJSWpGHcTyBYOreTj1NKBudwU5xHPA8pw003XCTDc",
-            "verb": "grant"
+            "schema_said_referenced": "EBSxJSWpGHcTyBYOreTj1NKBudwU5xHPA8pw003XCTDc"
           },
           "kind": "exchange"
-        },
-        {
-          "exported_credential_id": "carrier_license_application",
-          "kind": "lifecycle_advance",
-          "to_state": "issued"
         },
         {
           "aggregate_id": "license_registry",
@@ -336,6 +329,7 @@
         }
       ],
       "id": "submit_application",
+      "mints_credential_id": "carrier_license_application",
       "name": "Submit license application",
       "payload_schema": {
         "additionalProperties": false,
@@ -444,6 +438,7 @@
           "disclosure_mode": "full",
           "edges": [],
           "holder_role": "carrier",
+          "self_issued": true,
           "verifier_roles": [
             "state-doi"
           ]
@@ -459,9 +454,11 @@
             {
               "from": "issued",
               "id": "supersede",
-              "tel_primitive": "update",
               "to": "superseded",
-              "trigger": "manual"
+              "trigger": "manual",
+              "via_command": [
+                "submit_application"
+              ]
             }
           ]
         },
@@ -485,13 +482,13 @@
       }
     ]
   },
-  "d": "EFw1Ccs6d_1g1g1L5rZ4ASxbV7PMnV84uVk4W9NY608R",
+  "d": "EOFNObcg5i0R12rqAAanHPMvT7EmZ4GbwHss3Ek1p1fj",
   "header": {
     "description": "The carrier's side of license application: a startup insurance carrier submits an application to a state regulator and processes the resulting grant or revocation. Pivotal event: an application has been submitted and adjudicated.",
     "display_name": "Carrier Applies for License",
     "expression_language": "CEL/1.0",
     "id": "carrier-applies-for-license",
-    "version": "1.2"
+    "version": "1.3"
   },
   "projections": [
     {
