@@ -140,30 +140,68 @@ because a corpus can otherwise end up spelling supersession three ways, as this 
 
 For each exported credential, walk:
 
-1. **Envelope contract** — who holds it, who verifies it, what it chains from
+1. **Envelope contract** — who holds it (or whether it is untargeted — see the *I issue / I attest*
+   diagnostic in `SKILL.md`, run at this step), who verifies it, what it chains from
 2. **Schema** — author a JSON-Schema file in `schemas/` and capture its SAID
-3. **Lifecycle** — states, initial state, transitions (with `tel_primitive` mapping each transition to issue/update/revoke)
+3. **Lifecycle** — states, initial state, transitions (each declares its own driver — see below)
 4. **Ricardian rules** — forward-reference rule ids; will be authored in Step 9
 5. **Value flow** — references to other credentials implied by this one
 
-**Edge operators:**
+**Envelope: targeted, self-issued, or untargeted.** `holder_role` is optional — its absence is a
+legal, distinct shape, not an omission:
+
+| Shape | `holder_role` | `self_issued` | Schema declares `i` |
+|---|---|---|---|
+| Targeted at another | present, another role | `false` | yes |
+| Self-issued | present, this role | `true` | yes |
+| Untargeted (attestation) | absent | `false` | **no** |
+
+**The schema owns *whether* there is an Issuee; the template owns *which role* holds it** — both
+must agree, and `micro-app check` cross-checks them. Run the diagnostic in `SKILL.md` before
+picking a row. The full reasoning for why this became three shapes instead of one required field —
+and the measurement of what the old required `holder_role` actually produced — is
+`docs/canon/keri-conceptual-contours.md` §4.3 (ugard repo). This file teaches the shape; that one
+holds the why.
+
+**Edge operators** (`edges[].operator`, optional — absence takes the protocol's own default,
+computed from the far node's targetedness):
 
 | Operator | Meaning |
 |---|---|
-| `authorizes` | Holder of parent becomes issuer of this credential |
-| `references` | Informational pointer; no authority transfer |
-| `authorizes-via-delegate` | Issuer is a KEL-delegated AID of parent's holder |
+| `authorizes` | Holder of parent becomes issuer of this credential. **Requires a targeted far node** — declaring it against an untargeted node is an error. |
+| `references` | Informational pointer; no authority transfer. Legal against a targeted **or** untargeted far node — including a node that would otherwise default to `authorizes`. |
+| `authorizes-via-delegate` | Issuer is a KEL-delegated AID of parent's holder. |
 
-**Lifecycle transitions ground out in TEL primitives:**
+See `docs/canon/keri-conceptual-contours.md` §4.4 (ugard) for why the rule is one-directional and
+why a symmetric version over-reaches.
 
-- `issue` — TEL issuance event (state becomes active or whatever the initial-active state is)
-- `update` — TEL update event (intermediate state change, e.g., active → suspended)
-- `revoke` — TEL revocation event
+**Lifecycle: every transition declares its own driver.** `transitions[]` holds only genuine
+state-to-state edges — `initial` is the state an instance is *born into* (issuance is
+initialization, not a transition), so no entry needs to target it. Each transition has `id`, `from`
+(string or array), `to`, optional guards (`requires[]`, `condition_rule_ref`), and **at least one**
+of:
 
-The state machine layered on top can have any names; transitions map each to one of these three TEL
-primitives. A TEL's `ts` **MUST be a string from a finite set of state values** (ACDC, `upd` field
-constraints), which is exactly what your `states` list is — `issued`/`revoked` are the spec's *common*
-CESR encodings, not the whole permitted set.
+| Driver | Shape | Fires when |
+|---|---|---|
+| `via_command` | array of command ids | one of these commands succeeds against an instance in `from` |
+| `via_reaction` | array of reaction ids | one of these reactions fires against an instance in `from` |
+| `via_workflow` | a single workflow id (string) | that workflow's step drives the transition |
+| `trigger: "automatic"` | + `condition_rule_ref` | the rule evaluates true, with no human action in the loop |
+
+A transition MAY declare more than one driver — a license suspended by a regulator's command *or*
+by automatic premium-lapse detection derives the same TEL `upd`:
+
+```json
+{ "id": "activate", "from": "pending", "to": "active",
+  "via_command": ["activate_license"], "requires": [{ "rule_ref": "premium_paid" }] }
+```
+
+Every state change — including issuance and revocation — is a `upd` at the TEL; there is no
+separate issue/update/revoke message type to map a transition to, so nothing here names one. A
+lifecycle with exactly one state declares `transitions: []` and is directly anchored (`ixn` +
+`SealDigest`), with no registry at all. For *why* the old `tel_primitive` enum named message types
+the protocol doesn't have, and what mapping a richer state machine onto three primitives cost the
+corpus, see `docs/canon/keri-conceptual-contours.md` §3.2 and §4.1 (ugard).
 
 ### One spelling per concept — decide it here, record it in `metadata.json`
 
@@ -172,7 +210,7 @@ choice down; otherwise a corpus ends up with all three, as this one has:
 
 | Spelling | Use when | Corpus |
 |---|---|---|
-| **TEL state** (`issued → superseded`, `tel_primitive: update`) | the issuer's act changes the thing's standing | `rating_attestation` ✅ |
+| **TEL state** (`issued → superseded`, driven by a declared transition) | the issuer's act changes the thing's standing | `rating_attestation` ✅ |
 | **A `supersedes` edge** (self-referential, `operator: references` / NI2I) | the *lineage link* itself must be verifiable, not just the standing | `product_definition_version` ✅ |
 | **A domain event** (`rate_program_superseded`) | **never, for a credential's own lifecycle** | rate program ❌ |
 
@@ -243,12 +281,54 @@ Stamp the SAIDs with `python scripts/saidify_acdc_schema.py schemas/{credential_
 3. **Payload schema** — JSON-Schema for the actor's input (Locksmith renders as a form)
 4. **Authorization (KERI-native)** — every externally-invocable command declares `authz`: `open` (any authenticated AID), `aid`/`allowlist` (specific AID(s)), or `credential` (`schema_said` [+ optional `issuer`]). Never express authorization as a CEL predicate — that is a defect (see the BE-KERI-NATIVE doc). `auth_preconditions` are for *non-authz* validation only (payload completeness, state guards).
 5. **Preconditions** — state (forward-ref rules), temporal (forward-ref rules)
-6. **Emissions** — what fires on success: exchange (IPEX or exn out), lifecycle_advance (advance a credential's state), aggregate_event (append to a local aggregate)
+6. **Emissions** — what fires on success: `exchange` (IPEX or exn out) or `aggregate_event` (append
+   to a local aggregate) — nothing else. A command that changes a credential's lifecycle does so by
+   being named in that transition's `via_command` (Step 3), never by emitting.
+7. **Minting** — does this command produce a new instance of one of your `exports[]`? If so, declare
+   `mints_credential_id` (below).
 
 **Anti-patterns:**
 
 - ❌ Using `/ipex/*` for app-defined commands — reserved for protocol
 - ❌ Expressing authorization as a CEL predicate in `auth_preconditions` — use the `authz` field instead
+
+### Minting a credential, and the derived outbound verb
+
+**`mints_credential_id`** (optional, on a command or a reaction) names one of your `exports[].id`
+that this command/reaction **produces an instance of**. From that one declaration the loader
+derives both the anchoring act (registry inception plus the first `upd` at `lifecycle.initial`)
+and, where the command has a `counterparty_role`, the IPEX `grant` that discloses it. Where
+`counterparty_role` is null, the mint derives the anchoring act only — the self-issued shape.
+
+A command driving a *non-issuing* transition instead declares a **required property named
+`credential_said` on its own `payload_schema`** — the actor supplies the SAID of the instance
+being transitioned, and the loader carries it into the `upd`'s `td`. (This is the *command's*
+input schema, not the appended-event `payload_schema` the next section reserves the name on —
+the reservation is scoped to events; a command payload is a different object.) A minting command
+declares neither `credential_said` nor a back-reference to a prior instance: the act creates the
+SAID, so there is nothing yet to name.
+
+**The outbound IPEX verb is never authored — it is derived from what the emission carries:**
+
+| Emission carries | Derives to |
+|---|---|
+| `exported_credential_id` | `grant` |
+| `imported_credential_id`, `present: true` | `grant` — presenting a credential you already hold |
+| `imported_credential_id`, `refuse: true` | `spurn` |
+| `imported_credential_id`, neither | `admit` |
+
+`refuse` and `present` are booleans (default `false`), mutually exclusive, valid only alongside
+`imported_credential_id`. There is no outbound `apply`/`offer`/`agree` at all: this profile models
+"applying" as issuing an application credential and granting it.
+
+**Inbound keeps the full six.** A reaction's `trigger.ipex_verb` and a workflow step's
+`expected_inbound[].ipex_verb` (Step 7) may still match any of `apply, offer, agree, grant, admit,
+spurn` — a counterparty you don't control may send any of them, and a role that can't declare an
+arrival can't react to it.
+
+Why the split is shaped this way — the IPEX routes table, the fact that `spurn` is sent by either
+party, and the caveat that the ACDC spec's IPEX section is explicitly non-normative — is
+`docs/canon/keri-conceptual-contours.md` §4.5 (ugard).
 
 ### The just-issued credential's SAID
 
@@ -482,6 +562,8 @@ For each reaction:
 2. **Authorization (KERI-native)** — every externally-invocable reaction declares `authz`: `open` (any authenticated AID), `aid`/`allowlist` (specific AID(s)), or `credential` (`schema_said` [+ optional `issuer`]). Never express authorization as a CEL predicate — that is a defect (see the BE-KERI-NATIVE doc). `auth_preconditions` are for *non-authz* validation only (payload completeness, state guards).
 3. **Emissions** — same shape as command emissions
 4. **Failure policy** — `log_and_continue` | `log_and_spurn` | `abort`; optional timeout_seconds
+5. **Minting** — a reaction may also declare `mints_credential_id` (Step 4) when observing the
+   trigger is itself what produces a new instance of one of your `exports[]`
 
 **The subscriber pattern:** Reactions observe events; they don't push to others. The decentralized property.
 
@@ -507,7 +589,13 @@ For each:
 
 The exchange palette across steps:
 
-- IPEX credential exchange — kind: credential, verb: one of six (apply/offer/agree/grant/admit/spurn).
+- IPEX credential exchange — kind: credential. On a **self** step, there is no authored `verb` — it
+  derives from what your command/reaction's emission carries (Step 4's "Minting a credential, and
+  the derived outbound verb"): `exported_credential_id` → `grant`; `imported_credential_id` +
+  `present: true` → `grant`; `imported_credential_id` + `refuse: true` → `spurn`;
+  `imported_credential_id` alone → `admit`. On a **counterparty** step,
+  `expected_inbound[].ipex_verb` names what you're waiting to receive, and keeps the full six:
+  apply, offer, agree, grant, admit, spurn — a counterparty you don't control may send any of them.
   **Three of the six are initiating** — `apply` (disclosee-driven), `offer` and `grant`
   (discloser-driven) — and `spurn` rejects at **any** stage, so every awaiting step needs a refusal
   path (adversarial check 5). `grant → admit` is a legal two-message exchange; the full

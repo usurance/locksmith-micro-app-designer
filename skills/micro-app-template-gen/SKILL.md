@@ -54,6 +54,22 @@ The 10-step process is **rigid in order**. Step N's questions depend on Step N-1
 | 9 | Rules | §Step 9 — resolve every forward-referenced rule_ref |
 | 10 | Conventions, hints, lineage (metadata.json) | §Step 10 |
 
+### The export diagnostic (run per export, at Step 3)
+
+**Ask, for every export: is this an "I issue" or an "I attest"?**
+
+- *I issue* — targeted: it confers something on a named party, who can prove they hold it.
+  Declare `holder_role`; the schema declares `i`.
+- *I attest* — untargeted: it asserts something, to whom it may concern. **Omit `holder_role`**;
+  the schema omits `i`.
+
+If you cannot answer, the export is mis-modelled. This one question catches four of the five
+bundles in the corpus that this model change exists to replace.
+
+The measurement and the full reasoning — why `holder_role` used to be required, what that forced
+every export to become, and why the fix is three distinguishable shapes rather than one optional
+field — are in `docs/canon/keri-conceptual-contours.md` §4.3 (ugard repo).
+
 Plus:
 
 - **Adversarial review** (between Step 10 and save) — walk `references/adversarial-prompts.md` checklist

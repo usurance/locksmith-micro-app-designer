@@ -148,10 +148,11 @@ not *credential* everything — the KEL is already an append-only, witnessed, du
 and anchoring is what puts your content into it. A counterparty about to *act* on your authority needs
 now-ness, and that is what an ACDC is for.
 
-In this template model the anchor tier is spelled **`log_scope: "witnessed"`** on an aggregate —
-"KEL-anchored, witnessed" — as against `private` (local-only, no witnesses) and `shared` (multi-party).
-Four of the landed corpus's six aggregates already use it. Choose it deliberately; it is not a
-formality at the end of Step 5.
+In this template model the anchor tier is spelled **`log_scope: "witnessed"`** on an aggregate, as
+against `private` (local-only, no witnesses) and `shared` (multi-party). What that word commits to
+is now a ruling, not a gloss — cite it rather than re-describing it:
+`docs/canon/keri-conceptual-contours.md` §3.3 (ugard repo). Four of the landed corpus's six
+aggregates already use it. Choose it deliberately; it is not a formality at the end of Step 5.
 
 > **The content plane is not the protocol's problem, and this is the part that bites.** A SAID proves
 > integrity; it provides **no retrieval**. Anchoring a digest does not store the bytes anywhere — if the
@@ -260,15 +261,18 @@ Status was a literal chosen by which event arrived.
 **KERI-native shape.** A TEL state change on the credential's own registry. "Current" is then a dated
 query, not a flag. A TEL's `ts` **MUST be a string from a finite set of state values**, which is
 exactly what your `lifecycle.states` list is — `issued`/`revoked` are the spec's *common* encodings,
-not the whole permitted set, so a richer declared state machine mapped onto the three
-`tel_primitive`s (`issue` / `update` / `revoke`) is protocol-legal.
+not the whole permitted set, so a richer declared state machine is protocol-legal: every state
+change, including issuance and revocation, is a `upd`, and each `transitions[]` entry declares its
+own driver (`via_command` / `via_reaction` / `via_workflow` / `trigger: "automatic"` — see
+`references/ten-step-process.md` §Step 3) rather than mapping to a separate issue/update/revoke
+message type.
 
 **Then pick ONE spelling and record it.** A credential's lifecycle has two legitimate spellings and
 one wrong one:
 
 | Spelling | Use when | Corpus |
 |---|---|---|
-| **TEL state** (`issued → superseded`, `tel_primitive: update`) | the issuer's act changes the thing's standing | `rating_attestation` ✅ |
+| **TEL state** (`issued → superseded`, driven by a declared transition) | the issuer's act changes the thing's standing | `rating_attestation` ✅ |
 | **A `supersedes` edge** (self-referential, `operator: references`/NI2I) | you need the *lineage link* to be verifiable, not just the standing | `product_definition_version` ✅ |
 | **A domain event** (`rate_program_superseded`) | **never, for a credential's own lifecycle** | rate program ❌ |
 

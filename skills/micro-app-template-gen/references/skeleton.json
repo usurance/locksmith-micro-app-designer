@@ -1,6 +1,6 @@
 {
   "d": "############################################",
-  "spec_version": "micro-app-template/0.1",
+  "spec_version": "micro-app-template/0.2",
   "header": {
     "id": "REPLACE-ME",
     "display_name": "REPLACE ME",
@@ -22,16 +22,60 @@
   },
   "credentials": {
     "imports": [],
-    "exports": []
+    "exports": [
+      {
+        "id": "REPLACE-ME-CREDENTIAL",
+        "name": "REPLACE ME",
+        "description": "REPLACE ME — one paragraph describing this credential. Run the I-issue/I-attest check (SKILL.md) before filling in envelope.holder_role below — omit it entirely for an untargeted attestation.",
+        "envelope": {
+          "holder_role": "REPLACE-ME",
+          "verifier_roles": [],
+          "edges": [],
+          "disclosure_mode": "full"
+        },
+        "schema": {
+          "schema_said": "############################################",
+          "schema_path": "schemas/replace-me.json"
+        },
+        "lifecycle": {
+          "states": ["REPLACE-ME-INITIAL", "REPLACE-ME-NEXT"],
+          "initial": "REPLACE-ME-INITIAL",
+          "transitions": [
+            {
+              "id": "REPLACE-ME-TRANSITION",
+              "from": "REPLACE-ME-INITIAL",
+              "to": "REPLACE-ME-NEXT",
+              "via_command": ["REPLACE-ME-ADVANCE-COMMAND"]
+            }
+          ]
+        },
+        "rule_refs": []
+      }
+    ]
   },
   "commands": [
     {
-      "id": "REPLACE-ME",
+      "id": "REPLACE-ME-COMMAND",
       "name": "REPLACE ME",
-      "description": "REPLACE ME — one sentence describing the action.",
+      "description": "REPLACE ME — one sentence describing the action that mints this credential (creates the instance at lifecycle.initial).",
       "route": "/replace-me/cmd/replace-me",
       "authz": {"method": "open"},
       "payload_schema": {"type": "object", "properties": {}, "additionalProperties": false},
+      "mints_credential_id": "REPLACE-ME-CREDENTIAL",
+      "emissions": []
+    },
+    {
+      "id": "REPLACE-ME-ADVANCE-COMMAND",
+      "name": "REPLACE ME",
+      "description": "REPLACE ME — one sentence describing the action that drives the REPLACE-ME-TRANSITION transition on an already-issued instance. A non-minting command names the instance via a required `credential_said` payload property — never `mints_credential_id`.",
+      "route": "/replace-me/cmd/replace-me-advance",
+      "authz": {"method": "open"},
+      "payload_schema": {
+        "type": "object",
+        "properties": { "credential_said": { "type": "string" } },
+        "required": ["credential_said"],
+        "additionalProperties": false
+      },
       "emissions": []
     }
   ],

@@ -119,7 +119,11 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
 - *"When they show this to someone, do they show all of it — or does the other side usually only need one part of it?"* → full vs selective vs partial disclosure. **Do not offer "aggregate" as a choice**; it is the mechanism for one of these answers, not something an SME can pick. Route the decision to `acdc-design`
 - *"Is it addressed to one named party who'll rely on it, or is it a statement anyone might read?"* → targeted (**credential**) vs untargeted (**attestation**). Ask it this way; the two protocol words are yours, not theirs
 - *"What states does this credential go through?"* — list them
-- *"For each state, how is it reached? Through which workflow? Mapping to KERI: is the transition an `issue` (initial creation), an `update` (mid-life change), or a `revoke` (terminal)?"*
+- *"For each state, how is it reached — one of your own commands, an automatic rule, a workflow
+  step, or more than one of those?"* → the transition's driver (`via_command` / `via_reaction` /
+  `via_workflow` / `trigger: "automatic"`, ten-step §Step 3). Every state change is the same KERI
+  primitive underneath (a TEL `upd`) whichever driver reaches it — this question is about *what
+  causes it*, never about mapping it to an `issue`/`update`/`revoke` label
 
 ## Step 4 — Commands
 
@@ -138,10 +142,15 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
 - *"Any deadlines, cooldowns, business hours?"* → `temporal_preconditions`
 - *"If the actor retries, what stops a duplicate?"* — **nothing to author:** the runtime dedups on the
   exn message's own SAID.
-- *"When this succeeds, what actually happens? Does something go out to the other party? Does something
-  they hold change status? Does it just get written down on your side? Any combination?"* → the three
-  emission kinds. **Do not say "IPEX" or "aggregate" out loud** — the discipline rule scopes that
+- *"When this succeeds, what actually happens? Does something go out to the other party? Does it just
+  get written down on your side? Any combination?"* → the two emission kinds (`exchange`,
+  `aggregate_event`). **Do not say "IPEX" or "aggregate" out loud** — the discipline rule scopes that
   vocabulary to your own modeling, not to the interview
+- *"Does this also create a new credential of one of the types this role produces — or move an
+  existing one of them to its next state?"* → creating one is `mints_credential_id`; moving an
+  existing one is naming this command in that transition's `via_command` (Step 3). Not an emission
+  either way — a command's effect on a credential's standing is declared on the credential's own
+  lifecycle, never emitted
 
 ## Step 5 — Aggregates
 
