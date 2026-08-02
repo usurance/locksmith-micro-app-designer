@@ -328,10 +328,15 @@ _CORPUS_PARAMS = [
 #: verb, and the advance-the-lifecycle emission kind), so an `errors == []` assertion is the
 #: wrong shape for them now. Mirrors the identical re-pin concierge-api's Task 12 did to
 #: `tests/cli/test_emission_bindings_calibration.py`'s `EXPECTED_ERROR_COUNT` map for
-#: these same three bundles -- same date, same reasoning, same numbers. Assertion is
-#: `==`, so it catches a regression (count rises) AND a silent over-fix (count falls)
-#: equally; when a bundle is re-authored and either drops out of CORPUS_BUNDLES or
-#: validates cleanly, delete its row.
+#: these same three bundles -- same date, same reasoning, DIFFERENT numbers (concierge-api's
+#: map there reads {"carrier-license-application": 3, "product-designer-publishes-product-version":
+#: 8, "regulator-grants-carrier-license": 6}): that map counts loader/binding errors
+#: (`emission_bindings.check_template`, e.g. `missing_subject_selector`); this one counts
+#: meta-schema validation errors (`jsonschema` against `micro-app-template.schema.json`) --
+#: two different checkers looking at the same bundles for two different reasons. Do not
+#: reconcile one map to the other. Assertion is `==`, so it catches a regression (count
+#: rises) AND a silent over-fix (count falls) equally; when a bundle is re-authored and
+#: either drops out of CORPUS_BUNDLES or validates cleanly, delete its row.
 EXPECTED_ERROR_COUNT = {
     "carrier-license-application": 3,
     "product-designer-publishes-product-version": 16,
