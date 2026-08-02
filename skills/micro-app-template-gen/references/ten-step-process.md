@@ -364,11 +364,11 @@ the event envelope as `credential_said`, and your fold handler reads it directly
   <!-- 2026-08-01: this bullet used to read "The value is meaningful only when the emission list
        contains a `kind: credential` exchange emission at or before this one. Put the issuing
        exchange first." That was the superseded exchange-based availability rule
-       (ugard backlog/2026-07-31-issuance-is-the-anchor-not-the-exchange.md). CAVEAT while the
-       redesign in ugard backlog/2026-08-01-derive-keri-primitives-from-the-template.md is open:
-       `micro-app check` still ENFORCES the old rule, so a template that issues without an
-       exchange emission will currently be rejected by the checker even though the spec now
-       permits it. Do not author around the checker — raise it against that item. -->
+       (ugard backlog/2026-07-31-issuance-is-the-anchor-not-the-exchange.md). The redesign in
+       ugard backlog/2026-08-01-derive-keri-primitives-from-the-template.md has landed and that
+       item is closed: concierge-api's `micro-app check` now grants availability per-act (mint,
+       drives a transition, or inbound trigger) instead of requiring an issuing exchange to
+       appear first. -->
 
 - Every *attribute* value is already in `command.*`, because your command supplied them. The
   SAID is the one value issuance *creates* rather than *consumes* — which is exactly why it
