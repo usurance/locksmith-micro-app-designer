@@ -133,6 +133,7 @@
             "additionalProperties": false,
             "properties": {
               "license_said": {
+                "from": "credential_said",
                 "type": "string"
               },
               "reinstatement_note": {
@@ -151,6 +152,7 @@
             "additionalProperties": false,
             "properties": {
               "license_said": {
+                "from": "credential_said",
                 "type": "string"
               },
               "revocation_reason": {
@@ -175,6 +177,7 @@
             "additionalProperties": false,
             "properties": {
               "license_said": {
+                "from": "credential_said",
                 "type": "string"
               },
               "suspended_at": {
@@ -574,16 +577,16 @@
               "type": "license_granted"
             },
             {
+              "credential_said": "ELicense2SAID",
               "payload": {
-                "license_said": "ELicense2SAID",
                 "suspended_at": "2026-09-01T00:00:00Z",
                 "suspension_reason": "late filing"
               },
               "type": "license_suspended"
             },
             {
+              "credential_said": "ELicense2SAID",
               "payload": {
-                "license_said": "ELicense2SAID",
                 "revocation_reason": "failure to remediate",
                 "revoked_at": "2026-10-01T00:00:00Z"
               },
@@ -796,7 +799,7 @@
       "payload_schema": {
         "additionalProperties": false,
         "properties": {
-          "license_said": {
+          "credential_said": {
             "maxLength": 44,
             "minLength": 44,
             "type": "string"
@@ -812,7 +815,7 @@
           }
         },
         "required": [
-          "license_said",
+          "credential_said",
           "suspension_reason",
           "suspended_at"
         ],
@@ -843,7 +846,7 @@
       "payload_schema": {
         "additionalProperties": false,
         "properties": {
-          "license_said": {
+          "credential_said": {
             "maxLength": 44,
             "minLength": 44,
             "type": "string"
@@ -854,7 +857,7 @@
           }
         },
         "required": [
-          "license_said",
+          "credential_said",
           "reinstatement_note"
         ],
         "type": "object"
@@ -884,7 +887,7 @@
       "payload_schema": {
         "additionalProperties": false,
         "properties": {
-          "license_said": {
+          "credential_said": {
             "maxLength": 44,
             "minLength": 44,
             "type": "string"
@@ -900,7 +903,7 @@
           }
         },
         "required": [
-          "license_said",
+          "credential_said",
           "revocation_reason",
           "revoked_at"
         ],
@@ -1027,13 +1030,13 @@
       }
     ]
   },
-  "d": "EDWlIJawwx8s_FeBvavtPDAvZrvC64WJL4z5cLhqSg0U",
+  "d": "EPhdBWhTGv01PyBYED24luqwYsVUOWYH3A5rTLivKhQI",
   "header": {
     "description": "The state Department of Insurance's side of carrier licensing: receive applications, adjudicate them, grant or spurn the license credential, and manage its full lifecycle (suspension, reinstatement, revocation). Pivotal event: a license has been granted or revoked.",
     "display_name": "Regulator Grants Carrier License",
     "expression_language": "CEL/1.0",
     "id": "regulator-grants-carrier-license",
-    "version": "1.3"
+    "version": "1.4"
   },
   "projections": [
     {
@@ -1371,9 +1374,8 @@
               "type": "license_granted"
             },
             {
-              "payload": {
-                "license_said": "ELicense1SAID"
-              },
+              "credential_said": "ELicense1SAID",
+              "payload": {},
               "type": "license_revoked"
             }
           ],
@@ -1477,7 +1479,7 @@
     },
     {
       "description": "Gates suspend_license on the named license_said being in active_licenses.",
-      "expression": "state.active_licenses.exists(l, l.license_said == command.license_said)",
+      "expression": "state.active_licenses.exists(l, l.license_said == command.credential_said)",
       "id": "license_currently_active",
       "language": "CEL/1.0",
       "purpose": "state_precondition",
@@ -1486,7 +1488,7 @@
     },
     {
       "description": "Gates reinstate_license on the named license_said being in suspended_licenses.",
-      "expression": "state.suspended_licenses.exists(l, l.license_said == command.license_said)",
+      "expression": "state.suspended_licenses.exists(l, l.license_said == command.credential_said)",
       "id": "license_currently_suspended",
       "language": "CEL/1.0",
       "purpose": "state_precondition",
@@ -1495,7 +1497,7 @@
     },
     {
       "description": "Gates revoke_license on the named license_said being either active or suspended (already-revoked licenses cannot be re-revoked).",
-      "expression": "state.active_licenses.exists(l, l.license_said == command.license_said) || state.suspended_licenses.exists(l, l.license_said == command.license_said)",
+      "expression": "state.active_licenses.exists(l, l.license_said == command.credential_said) || state.suspended_licenses.exists(l, l.license_said == command.credential_said)",
       "id": "license_currently_active_or_suspended",
       "language": "CEL/1.0",
       "purpose": "state_precondition",
