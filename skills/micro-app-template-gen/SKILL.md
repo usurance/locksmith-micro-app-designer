@@ -54,6 +54,48 @@ The 10-step process is **rigid in order**. Step N's questions depend on Step N-1
 | 9 | Rules | §Step 9 — resolve every forward-referenced rule_ref |
 | 10 | Conventions, hints, lineage (metadata.json) | §Step 10 |
 
+### The affordance grammar
+
+A template's behavior decomposes into eleven affordances — a small, human-facing vocabulary for
+what a Role does, grouped by position in the canonical abstract loop ("request compute based on my
+credentials; the compute returns credentials attesting that the compute was done"). A reader holds
+seven groups; the eleven leaves are the precision:
+
+| | Affordance | Template surface |
+|---|---|---|
+| **authorization in** | *I hold* | `imports[]` naming me as Issuee (targeted ACDC — authority I can prove I possess) |
+| | *I rely on* | `imports[]` untargeted, or targeted at another (evidence I verify but am not the subject of) |
+| **the act** | *I respond to* | `commands[]` — authority exercised in the moment, then signed |
+| | *I answer unattended* | `reactions[]`, `trigger: "automatic"`, `time_bound` — my AID signs on a standing precommitment declared in advance |
+| **ACDC out** | *I issue* | `exports[]` **with** `holder_role` — targeted, I confer on a named party |
+| | *I attest* | `exports[]` **without** `holder_role` — untargeted, "to whom it may concern" |
+| **provable** | *I anchor* | TEL events (derived) + `log_scope`, kind-2 artifacts (declared) — commitment with **no ACDC at all** |
+| conversations | *I follow* | `workflows[]` |
+| state | *I track* | `aggregates[]` |
+| | *I see* | `projections[]` — read-side view, never a protocol act |
+| constraints | *I am bound by* | `rules[]` |
+
+Only *I issue*, *I attest*, *I anchor* and *I answer unattended* leave a trace in the Role's own
+KEL. The full reasoning for each row — why the grammar reads eleven rather than the original
+seven, and why each addition earns its place — is in
+`docs/canon/keri-conceptual-contours.md` §5 (ugard repo).
+
+Two of the eleven have their own dedicated per-step diagnostic below, because the targeted/untargeted
+line is the one modelling mistake this grammar exists to make visible, and it cuts both ways
+(imports as well as exports).
+
+### The import diagnostic (run per import, at Step 2)
+
+**Ask, for every import: is this an "I hold" or an "I rely on"?**
+
+- *I hold* — targeted at me: an ACDC naming me as Issuee, authority I can prove I possess.
+- *I rely on* — untargeted, or targeted at another party: evidence I verify but am not the
+  subject of.
+
+Conflating the two is precisely the conflation behind the 82%-of-commands authorization finding in
+`docs/canon/keri-conceptual-contours.md` §4.3 (ugard repo) — see §5 for how the grammar makes it
+visible in the model rather than only in a linter.
+
 ### The export diagnostic (run per export, at Step 3)
 
 **Ask, for every export: is this an "I issue" or an "I attest"?**
