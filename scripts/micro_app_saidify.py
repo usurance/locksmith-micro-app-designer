@@ -12,8 +12,16 @@ import json
 import sys
 from pathlib import Path
 
-from locksmith_micro_app_designer.template.canonical_json import canonicalize
-from locksmith_micro_app_designer.template.saidify import (
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Runnable STANDALONE by an author, so it bootstraps its own import path rather than
+# relying on the caller's. See `scripts/micro_app_validate.py` for the full note:
+# `pyproject.toml`'s `pythonpath` reaches pytest, not the subprocesses pytest spawns.
+if str(REPO_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from locksmith_micro_app_designer.template.canonical_json import canonicalize  # noqa: E402
+from locksmith_micro_app_designer.template.saidify import (  # noqa: E402
     compute_said,
     saidify_document,
     verify_said,

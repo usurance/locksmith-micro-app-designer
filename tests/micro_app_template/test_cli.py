@@ -52,7 +52,16 @@ def test_saidify_verify_fails_on_tampered(tmp_path, minimal_valid_template):
     out["header"]["display_name"] = "TAMPERED"
     src.write_text(json.dumps(out))
     result = _run(SAIDIFY, "--input", str(src), "--verify")
-    assert result.returncode != 0
+    # Assert the failure MODE, not merely "it failed". `returncode != 0` alone
+    # false-passes on an import error -- which it silently did for the whole
+    # PYTHONPATH-fragility window (2026-08-02): this test stayed green while the
+    # eight around it failed on ModuleNotFoundError, so the count read 8 and not 9,
+    # and the one test that could have named the real cause instead concealed it.
+    assert result.returncode == 1, (
+        f"expected the verify-mismatch exit code 1, got {result.returncode}: "
+        f"{result.stderr + result.stdout}")
+    assert "SAID mismatch" in result.stderr + result.stdout
+    assert "ModuleNotFoundError" not in result.stderr
 
 
 def test_validate_passes_on_valid(tmp_path, minimal_valid_template):

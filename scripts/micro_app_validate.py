@@ -7,10 +7,22 @@ import json
 import sys
 from pathlib import Path
 
-from locksmith_micro_app_designer.template.validate import validate_template
-
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# This script is meant to be runnable STANDALONE by an author -- `python
+# scripts/micro_app_validate.py --input …` from a fresh checkout, with no editable
+# install and no PYTHONPATH. `pyproject.toml`'s `pythonpath = ["src", …]` puts the
+# package on PYTEST's sys.path, not on a subprocess's, so `tests/micro_app_template/
+# test_cli.py` (which spawns this script) failed with ModuleNotFoundError whenever
+# `src` was absent from the caller's environment -- 8 failures that were carried
+# through four tasks as "pre-existing" and misread as cleared. Same bootstrap ugard's
+# mirror of this script uses.
+if str(REPO_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from locksmith_micro_app_designer.template.validate import validate_template  # noqa: E402
+
+
 DEFAULT_SCHEMA = REPO_ROOT / "docs/superpowers/specs/schemas/micro-app-template.schema.json"
 
 
