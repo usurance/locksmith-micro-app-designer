@@ -338,9 +338,15 @@ _CORPUS_PARAMS = [
 #: rises) AND a silent over-fix (count falls) equally; when a bundle is re-authored and
 #: either drops out of CORPUS_BUNDLES or validates cleanly, delete its row.
 EXPECTED_ERROR_COUNT = {
-    "carrier-license-application": 3,
+    # Rows for the carrier pair DELETED 2026-08-02: both bundles were re-authored
+    # from scratch through the KERI-shape pass (ugard
+    # backlog/2026-07-31-delete-and-reauthor-the-ipc-corpus.md) and now validate
+    # cleanly -- 3 -> 0 and 10 -> 0. Every one of those 13 errors was the deleted
+    # vocabulary itself (`tel_primitive`, `lifecycle_advance`, the restated outbound
+    # `exchange.verb`), which is why they cleared together. Deleting the rows is what
+    # this map's docstring prescribes for exactly this case, so a future regression in
+    # either bundle now fails against zero rather than against a tolerated count.
     "product-designer-publishes-product-version": 16,
-    "regulator-grants-carrier-license": 10,
 }
 
 
