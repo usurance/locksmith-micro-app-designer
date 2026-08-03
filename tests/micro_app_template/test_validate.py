@@ -304,6 +304,73 @@ def test_xref_catches_dangling_reference(doc, expected_substring):
     )
 
 
+# --- one reading of the driver type ------------------------------------------
+# MIRROR of ugard's tests/micro_app_template/test_xref.py block of the same name.
+# `via_command`/`via_reaction` are arrays, but a bare string is what an author
+# writes by hand and what the field these replaced used, so it reaches xref.py.
+# Iterating the raw value walked a bare string's CHARACTERS — 17 bogus
+# `command '<char>' not found` findings for one 17-character typo, burying the one
+# real diagnostic — and raised TypeError outright on a non-string entry. This is
+# the exact mechanism canon §4.1 records as fixed, so it gets a pin in both repos.
+
+def _driver_doc(via_command=None, via_reaction=None):
+    """One export whose only transition declares the given driver(s), against a
+    real command `activate_license` and a real reaction `on_paid`."""
+    transition = {"id": "activate", "from": ["pending"], "to": "active"}
+    if via_command is not None:
+        transition["via_command"] = via_command
+    if via_reaction is not None:
+        transition["via_reaction"] = via_reaction
+    return {
+        "credentials": {"exports": [{
+            "id": "license", "schema": {"schema_said": "ELIC"},
+            "lifecycle": {"states": ["pending", "active"], "initial": "pending",
+                          "transitions": [transition]}}]},
+        "commands": [{"id": "activate_license"}],
+        "reactions": [{"id": "on_paid"}],
+    }
+
+
+def test_bare_string_via_command_yields_exactly_one_finding():
+    errors = validate_xrefs(_driver_doc(via_command="activatee_license"))
+    assert [e.message for e in errors] == [
+        "credentials.exports[0].lifecycle.transitions[0].via_command: "
+        "command 'activatee_license' not found"]
+
+
+def test_bare_string_via_reaction_yields_exactly_one_finding():
+    errors = validate_xrefs(_driver_doc(via_reaction="on_paidd"))
+    assert [e.message for e in errors] == [
+        "credentials.exports[0].lifecycle.transitions[0].via_reaction: "
+        "reaction 'on_paidd' not found"]
+
+
+def test_bare_string_that_resolves_produces_no_error():
+    assert validate_xrefs(_driver_doc(via_command="activate_license",
+                                      via_reaction="on_paid")) == []
+
+
+def test_empty_driver_declarations_are_not_references():
+    """An empty NAME names nothing, so it is not a dangling reference either —
+    same reading as concierge-api's `driver_names` (loader/lifecycle.py). The
+    absent-driver finding is the lifecycle analyser's, not xref's."""
+    assert validate_xrefs(_driver_doc(via_command="", via_reaction=[""])) == []
+
+
+def test_non_string_driver_entries_are_ignored_not_crashed():
+    """A wrongly-typed entry is the meta-schema's finding. xref must not raise,
+    and must not report a `None`/`42` as a dangling command name."""
+    assert validate_xrefs(_driver_doc(via_command=[None, 42], via_reaction=7)) == []
+
+
+def test_mixed_driver_list_reports_only_the_dangling_entry_at_its_own_index():
+    errors = validate_xrefs(
+        _driver_doc(via_command=["activate_license", "activatee_license"]))
+    assert [e.message for e in errors] == [
+        "credentials.exports[0].lifecycle.transitions[0].via_command[1]: "
+        "command 'activatee_license' not found"]
+
+
 def test_xref_passes_on_consistent_doc():
     """A document with all references resolving should produce no xref errors."""
     doc = {

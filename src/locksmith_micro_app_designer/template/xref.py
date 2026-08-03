@@ -51,6 +51,37 @@ def _collect_aggregate_ids(doc: dict[str, Any]) -> set[str]:
     return {a["id"] for a in doc.get("aggregates", []) if "id" in a}
 
 
+def _driver_refs(node: dict[str, Any], key: str) -> list[tuple[str, str]]:
+    """`(path suffix, name)` for each non-empty name declared under one driver key.
+
+    ONE READING of the driver type, mirroring concierge-api's
+    `loader/lifecycle.py::driver_names`. `via_command`/`via_reaction` are declared
+    as arrays, but a bare string is what an author writes by hand and what the
+    field these replaced used, so it reaches here — and iterating a bare string
+    walks its CHARACTERS, emitting one bogus `command '<char>' not found` per
+    character (17 for a 17-character typo) and burying the one real diagnostic.
+    A non-string entry used to raise `TypeError` outright.
+
+    An empty name is not a declaration, so it is not a dangling reference either;
+    a transition that declares nothing is `missing_transition_driver`'s business
+    (concierge-api's lifecycle analyser), not xref's. Non-string entries are the
+    meta-schema's finding, so they are ignored rather than mistyped into one here.
+
+    MIRROR: this function and its two call sites exist BYTE-IDENTICALLY in
+    `ugard/src/locksmith/micro_app_template/xref.py` and
+    `locksmith-micro-app-designer/src/locksmith_micro_app_designer/template/xref.py`.
+    Change both or neither — identical logic AND identical error text, because the
+    two copies drifting is how the wrong reading survived in one of them.
+    """
+    value = node.get(key)
+    if isinstance(value, str):
+        return [(key, value)] if value else []
+    if isinstance(value, list):
+        return [(f"{key}[{i}]", name) for i, name in enumerate(value)
+                if isinstance(name, str) and name]
+    return []
+
+
 def validate_xrefs(doc: dict[str, Any]) -> list[XrefError]:
     """Return a list of unresolved cross-references found in doc."""
     errors: list[XrefError] = []
@@ -79,17 +110,19 @@ def validate_xrefs(doc: dict[str, Any]) -> list[XrefError]:
                 ))
             # via_command / via_reaction: a dangling driver id silently disables
             # the transition (§5.2's defect, reintroduced on the replacement
-            # fields unless checked here -- F4/F5/R10).
-            for n, vc in enumerate(t.get("via_command") or []):
+            # fields unless checked here -- F4/F5/R10). `_driver_refs` gives the
+            # type ONE reading; see its docstring for what iterating the raw value
+            # did to a bare string.
+            for suffix, vc in _driver_refs(t, "via_command"):
                 if vc not in command_ids:
                     errors.append(XrefError(
-                        path=f"credentials.exports[{i}].lifecycle.transitions[{k}].via_command[{n}]",
+                        path=f"credentials.exports[{i}].lifecycle.transitions[{k}].{suffix}",
                         reference=vc, target_type="command",
                     ))
-            for n, vr in enumerate(t.get("via_reaction") or []):
+            for suffix, vr in _driver_refs(t, "via_reaction"):
                 if vr not in reaction_ids:
                     errors.append(XrefError(
-                        path=f"credentials.exports[{i}].lifecycle.transitions[{k}].via_reaction[{n}]",
+                        path=f"credentials.exports[{i}].lifecycle.transitions[{k}].{suffix}",
                         reference=vr, target_type="reaction",
                     ))
             cond = t.get("condition_rule_ref")
