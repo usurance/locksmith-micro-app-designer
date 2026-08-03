@@ -75,10 +75,18 @@ seven groups; the eleven leaves are the precision:
 | | *I see* | `projections[]` — read-side view, never a protocol act |
 | constraints | *I am bound by* | `rules[]` |
 
-Only *I issue*, *I attest*, *I anchor* and *I answer unattended* leave a trace in the Role's own
-KEL. The full reasoning for each row — why the grammar reads eleven rather than the original
-seven, and why each addition earns its place — is in
-`docs/canon/keri-conceptual-contours.md` §5 (ugard repo).
+Only *I issue*, *I attest* and *I anchor* leave a trace in the Role's own **KEL** — three, not four.
+*I answer unattended* and *I respond to* leave a **signed** trace: an `exn` is a KERI "Other Message",
+which the spec puts in the class of messages *"not part of a KEL"* (KERI spec § *Message type field*),
+so a reaction leaves a KEL trace only when it also mints (*I issue* / *I attest*) or anchors
+(*I anchor*). The three that do get theirs from the anchoring requirement: *"The SAID of this event
+MUST be anchored in the Issuer's KEL as the Registry proof seal. Update events in the Registry's TEL
+MUST also be anchored"* (ACDC spec § *Issuance and Revocation*). *(Corrected 2026-08-02, fix round 2:
+this line read "four … and *I answer unattended*", copied from the vision document, and contradicted
+canon §5's audit table in the same paragraph that sends you to canon §5. The vision document was the
+defect; canon and both specs agree on three.)* The full reasoning for each row — why the grammar reads
+eleven rather than the original seven, why each addition earns its place, and the audit table that
+splits KEL trace from signed trace — is in `docs/canon/keri-conceptual-contours.md` §5 (ugard repo).
 
 Two of the eleven have their own dedicated per-step diagnostic below, because the targeted/untargeted
 line is the one modelling mistake this grammar exists to make visible, and it cuts both ways

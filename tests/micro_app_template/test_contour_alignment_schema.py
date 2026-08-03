@@ -45,6 +45,28 @@ def test_self_issued_flag_is_expressible():
     }, "exported_credential")
 
 
+def test_explicit_self_issued_false_on_an_untargeted_export_is_expressible():
+    """The counterpart of R6, on a different field.
+
+    A `dependentRequired: {"self_issued": ["holder_role"]}` was proposed as the
+    meta-schema half of concierge-api's `self_issued_holder_role_conflict`. It is
+    key-PRESENCE keyed, so it would reject this shape — an untargeted attestation
+    stating `self_issued: false` explicitly, exactly matching the field's own
+    documented `default: false` — which is the class-3 over-reach R6 removed from
+    `refuse`/`present`. It was NOT added (design spec §13's row for that rule
+    records why: the only half JSON-Schema can express is a strict subset of the
+    checker rule, with a worse message). This test is the pin that keeps the shape
+    legal if anyone proposes it again.
+    """
+    _validate({
+        "id": "rating_attestation", "name": "R", "description": "d",
+        "envelope": {"self_issued": False, "verifier_roles": [], "edges": [],
+                     "disclosure_mode": "full"},
+        "schema": {"schema_said": "E" + "a" * 43, "schema_path": "schemas/r.json"},
+        "lifecycle": {"states": ["issued"], "initial": "issued", "transitions": []},
+    }, "exported_credential")
+
+
 def test_transition_has_no_tel_primitive_and_takes_a_driver_list():
     _validate({"id": "suspend", "from": ["active"], "to": "suspended",
                "via_command": ["suspend_licence"], "trigger": "automatic",

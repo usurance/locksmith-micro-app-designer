@@ -226,8 +226,15 @@ class _ReactionSectionPane(QWidget):
                     f"exchange: {ex.get('kind','?')} · {verb_or_pattern}"
                 ))
                 # refuse/present are only meaningful on the imported-exchange
-                # branch (§6.4) -- display-only, mutually exclusive per the
-                # meta-schema's `not: {required: [refuse, present]}`.
+                # branch (§6.4) -- display-only. The meta-schema forbids them being
+                # BOTH TRUE, not both present: since each documents `default: false`,
+                # a presence-keyed exclusion would reject the explicit forms
+                # (`refuse: true, present: false`, and both-false) that state the
+                # default outright -- the class-3 over-reach R6 removed. The clause is
+                # `not: {required: [refuse, present], properties: {refuse: {const:
+                # true}, present: {const: true}}}`; this comment quoted the pre-R6
+                # half of it until 2026-08-02 (fix round 2), so it asserted something
+                # the schema does not say.
                 if ex.get("kind") == "credential" and ex.get("imported_credential_id"):
                     refuse_box = QCheckBox("refuse")
                     refuse_box.setChecked(bool(ex.get("refuse")))
