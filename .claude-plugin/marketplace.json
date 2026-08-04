@@ -12,7 +12,7 @@
       "name": "micro-app-template-gen",
       "source": "./",
       "description": "Guided 11-step authoring (ten steps plus a mandatory Step 1.5 KERI-shape pass) of micro-app templates: one role's slice of one use case, expressed as a JSON artifact on top of KERI primitives (exn, IPEX, ACDC, TEL). Includes worked examples, naming conventions, CEL/1.0 cheat-sheet, and an adversarial review checklist.",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "author": {
         "name": "SeriousCoderOne"
       },
