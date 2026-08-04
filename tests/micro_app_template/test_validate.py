@@ -117,7 +117,7 @@ from locksmith_micro_app_designer.template.xref import validate_xrefs
             "rules": [],
             "commands": [{
                 "id": "c1", "name": "c", "description": "c", "route": "/x/cmd/c",
-                "payload_schema": {}, "idempotency_key_expression": "hash(p)", "emissions": [],
+                "payload_schema": {}, "emissions": [],
                 "auth_preconditions": [{"rule_ref": "missing-rule"}],
             }],
         },
@@ -290,7 +290,7 @@ from locksmith_micro_app_designer.template.xref import validate_xrefs
             "aggregates": [],
             "commands": [{
                 "id": "c1", "name": "c", "description": "c", "route": "/x/cmd/c",
-                "payload_schema": {}, "idempotency_key_expression": "hash(p)",
+                "payload_schema": {},
                 "emissions": [{"kind": "aggregate_event", "aggregate_id": "missing-agg", "event_type": "e"}],
             }],
         },
