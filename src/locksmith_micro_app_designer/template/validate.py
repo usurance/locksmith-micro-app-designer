@@ -105,7 +105,10 @@ def _jsonschema_error_to_validation(e: jsonschema.ValidationError) -> Validation
 
 
 def _xref_error_to_validation(e: XrefError) -> ValidationError:
-    return ValidationError(path=e.path, message=e.message)
+    # `e.detail`, not `e.message`: the latter embeds the path, which this dataclass
+    # already carries in its own field, so callers printing "{path}: {message}"
+    # printed it twice.
+    return ValidationError(path=e.path, message=e.detail)
 
 
 def validate_against_meta_schema(

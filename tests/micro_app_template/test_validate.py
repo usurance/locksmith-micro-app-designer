@@ -371,6 +371,249 @@ def test_mixed_driver_list_reports_only_the_dangling_entry_at_its_own_index():
         "command 'activatee_license' not found"]
 
 
+# --- exchange emissions carry doc-local ids too --------------------------------
+# B14. The `aggregate_event` branch was cross-referenced from the start; the
+# `exchange` branch was argued out of it by a comment claiming exchange "carries
+# no doc-local id to cross-reference here". False: two of the three exchange
+# branches carry one. THE TRAP these tests exist to catch — the id is NESTED at
+# `emissions[j].exchange.exported_credential_id`, whereas `aggregate_id` sits
+# alongside `kind`. A fix written by analogy reads `em.get("exported_credential_id")`,
+# gets None on every live document, and checks nothing while looking checked. Every
+# fixture below nests the id, and every assertion pins the `.exchange.` path
+# segment, so the by-analogy version fails all of them.
+
+def _exchange_doc(exchange, surface="commands"):
+    """One command (or reaction) whose only emission is the given exchange, against
+    a real export `license` and a real import `application`."""
+    emission = {"kind": "exchange", "exchange": exchange}
+    doc = {
+        "credentials": {
+            "imports": [{"id": "application", "expected_schema_said": "E" + "x" * 43}],
+            "exports": [{"id": "license", "schema": {"schema_said": "E" + "y" * 43}}],
+        },
+        "commands": [],
+        "reactions": [],
+    }
+    if surface == "commands":
+        doc["commands"] = [{"id": "c1", "emissions": [emission]}]
+    else:
+        doc["reactions"] = [{"id": "r1", "emissions": [emission]}]
+    return doc
+
+
+def test_command_exchange_exported_credential_id_must_resolve():
+    errors = validate_xrefs(_exchange_doc(
+        {"kind": "credential", "exported_credential_id": "no_such_credential_at_all"}))
+    assert [e.message for e in errors] == [
+        "commands[0].emissions[0].exchange.exported_credential_id: "
+        "credentials.exports 'no_such_credential_at_all' not found"]
+
+
+def test_command_exchange_imported_credential_id_must_resolve():
+    errors = validate_xrefs(_exchange_doc(
+        {"kind": "credential", "imported_credential_id": "no_such_credential_at_all",
+         "refuse": True}))
+    assert [e.message for e in errors] == [
+        "commands[0].emissions[0].exchange.imported_credential_id: "
+        "credentials.imports 'no_such_credential_at_all' not found"]
+
+
+def test_reaction_exchange_credential_id_must_resolve():
+    """Half the corpus's six live exchange ids sit on a reaction or a refusal
+    command rather than a bundle's headline command, so the reaction surface is not
+    an afterthought: live example `carrier-license-application/on_license_granted`."""
+    errors = validate_xrefs(_exchange_doc(
+        {"kind": "credential", "imported_credential_id": "typoed_license"},
+        surface="reactions"))
+    assert [e.message for e in errors] == [
+        "reactions[0].emissions[0].exchange.imported_credential_id: "
+        "credentials.imports 'typoed_license' not found"]
+
+
+def test_exchange_ids_that_resolve_produce_no_error():
+    assert validate_xrefs(_exchange_doc(
+        {"kind": "credential", "exported_credential_id": "license"})) == []
+    assert validate_xrefs(_exchange_doc(
+        {"kind": "credential", "imported_credential_id": "application"})) == []
+
+
+def test_exchange_message_branch_carries_no_doc_local_id():
+    """`kind: "message"` holds `route`/`schema_id` and genuinely names no doc-local
+    id — the one branch of the three that must not be flagged. Live example:
+    `regulator-grants-carrier-license/spurn_application` emission 1."""
+    assert validate_xrefs(_exchange_doc(
+        {"kind": "message", "pattern": "notification",
+         "route": "/insurance/note/application_denied"})) == []
+
+
+def test_exchange_pools_are_not_crossed():
+    """`imported_credential_id` resolves against `credentials.imports[]` ONLY, and
+    vice versa. An issuer awaiting acknowledgement of a credential it exported
+    cannot name it here; that inexpressiveness is finding 45's remaining depth, not
+    a bug in the pool split. Widening the check to accept either pool papers over it."""
+    errors = validate_xrefs(_exchange_doc(
+        {"kind": "credential", "exported_credential_id": "application"}))
+    assert [e.message for e in errors] == [
+        "commands[0].emissions[0].exchange.exported_credential_id: "
+        "credentials.exports 'application' not found"]
+    errors = validate_xrefs(_exchange_doc(
+        {"kind": "credential", "imported_credential_id": "license"}))
+    assert [e.message for e in errors] == [
+        "commands[0].emissions[0].exchange.imported_credential_id: "
+        "credentials.imports 'license' not found"]
+
+
+def test_malformed_exchange_block_is_not_xrefs_finding():
+    """A non-dict `exchange`, or a missing one, is the meta-schema's finding. xref
+    must not raise and must not invent a reference."""
+    assert validate_xrefs(_exchange_doc("not-an-object")) == []
+    assert validate_xrefs({"commands": [{"id": "c1", "emissions": [{"kind": "exchange"}]}]}) == []
+
+
+# --- the rest of the same branch union -----------------------------------------
+# The exchange branch (above) was one of four places a credential id hid from xref.
+# Measured 2026-08-04 on the live corpus, each silent at zero errors: a
+# `lifecycle_event` reaction trigger's `imported_credential_id` (4 live ids, and
+# ZERO live triggers use the `exported_credential_id` that branch did check);
+# `workflows[].trigger`, never visited at all (1 live id); and
+# `envelope.edges[].credential_id`, meta-schema-REQUIRED with 3 live ids, where a
+# dangling value is an ACDC chain reference pointing nowhere.
+#
+# Pool discipline splits by field name, because that is what the names declare.
+# `imported_`/`exported_` resolve against their own pool only. Bare `credential_id`
+# declares no pool and canon does not give it one -- for `implied_credentials[]` it
+# says explicitly "in this template's exports list OR imported from elsewhere"
+# (authoring canon §6.3) -- so it resolves against EITHER, and only a value in
+# neither pool is a finding. Narrowing it to imports would false-fire on an edge to
+# a self-issued export, which the corpus's own `self_issued: true` shape permits.
+
+def _cred_doc(**sections):
+    """A doc with one export `license` and one import `application`, plus whatever
+    sections the case adds."""
+    doc = {
+        "credentials": {
+            "imports": [{"id": "application", "expected_schema_said": "E" + "x" * 43}],
+            "exports": [{"id": "license", "schema": {"schema_said": "E" + "y" * 43}}],
+        },
+    }
+    doc["credentials"]["exports"][0].update(sections.pop("export_extra", {}))
+    doc.update(sections)
+    return doc
+
+
+def _rx(trigger):
+    return _cred_doc(reactions=[{"id": "r1", "trigger": trigger}])
+
+
+def test_reaction_lifecycle_event_imported_credential_id_must_resolve():
+    """The branch checked only the field nobody uses. All four live `lifecycle_event`
+    triggers in the corpus name `imported_credential_id`; none name the exported one."""
+    errors = validate_xrefs(_rx(
+        {"type": "lifecycle_event", "imported_credential_id": "typoed_license",
+         "to_state": "revoked"}))
+    assert [e.message for e in errors] == [
+        "reactions[0].trigger.imported_credential_id: "
+        "credentials.imports 'typoed_license' not found"]
+
+
+def test_reaction_lifecycle_event_both_ids_keep_their_own_pools():
+    errors = validate_xrefs(_rx(
+        {"type": "lifecycle_event", "imported_credential_id": "license",
+         "exported_credential_id": "application"}))
+    assert sorted(e.message for e in errors) == [
+        "reactions[0].trigger.exported_credential_id: "
+        "credentials.exports 'application' not found",
+        "reactions[0].trigger.imported_credential_id: "
+        "credentials.imports 'license' not found",
+    ]
+    assert validate_xrefs(_rx(
+        {"type": "lifecycle_event", "imported_credential_id": "application",
+         "exported_credential_id": "license"})) == []
+
+
+def test_workflow_trigger_imported_credential_id_must_resolve():
+    """`workflows[].trigger` was never visited. Live id:
+    `regulator-grants-carrier-license/license_grant_workflow`."""
+    errors = validate_xrefs(_cred_doc(workflows=[{
+        "id": "w1", "trigger": {"type": "credential_received",
+                                "imported_credential_id": "typoed_application"}}]))
+    assert [e.message for e in errors] == [
+        "workflows[0].trigger.imported_credential_id: "
+        "credentials.imports 'typoed_application' not found"]
+
+
+def test_workflow_trigger_credential_id_resolves_against_either_pool():
+    for named in ("license", "application"):
+        assert validate_xrefs(_cred_doc(workflows=[{
+            "id": "w1", "trigger": {"type": "lifecycle_event",
+                                    "credential_id": named}}])) == []
+    errors = validate_xrefs(_cred_doc(workflows=[{
+        "id": "w1", "trigger": {"type": "lifecycle_event",
+                                "credential_id": "neither_pool"}}]))
+    assert [e.message for e in errors] == [
+        "workflows[0].trigger.credential_id: "
+        "credentials.imports/exports 'neither_pool' not found"]
+
+
+def test_workflow_trigger_without_credential_ids_is_not_a_reference():
+    assert validate_xrefs(_cred_doc(workflows=[
+        {"id": "w1", "trigger": {"type": "manual", "initiator_role": "carrier"}},
+        {"id": "w2", "trigger": {"type": "scheduled", "cadence": "* * * * *"}},
+        {"id": "w3"},
+    ])) == []
+
+
+def _edge_doc(credential_id):
+    return _cred_doc(export_extra={"envelope": {"edges": [
+        {"edge_name": "authority", "credential_id": credential_id,
+         "cardinality": "one", "operator": "authorizes"}]}})
+
+
+def test_edge_credential_id_must_resolve():
+    errors = validate_xrefs(_edge_doc("no_such_credential_at_all"))
+    assert [e.message for e in errors] == [
+        "credentials.exports[0].envelope.edges[0].credential_id: "
+        "credentials.imports/exports 'no_such_credential_at_all' not found"]
+
+
+def test_edge_credential_id_may_name_an_import_or_an_export():
+    """All three live edges point at an import, but `authorizes` on a self-issued
+    export is a legal chain and the corpus authors `self_issued: true`. Pinning this
+    to imports alone would break that, so both pools resolve."""
+    assert validate_xrefs(_edge_doc("application")) == []
+    assert validate_xrefs(_edge_doc("license")) == []
+
+
+def test_implied_credential_id_must_resolve():
+    doc = _cred_doc(export_extra={"value_flow": {"implied_credentials": [
+        {"credential_id": "ghost_credential", "relationship": "per_emission"}]}})
+    errors = validate_xrefs(doc)
+    assert [e.message for e in errors] == [
+        "credentials.exports[0].value_flow.implied_credentials[0].credential_id: "
+        "credentials.imports/exports 'ghost_credential' not found"]
+
+
+def test_implied_credential_id_resolves_against_either_pool():
+    for named in ("license", "application"):
+        assert validate_xrefs(_cred_doc(export_extra={"value_flow": {
+            "implied_credentials": [{"credential_id": named,
+                                     "relationship": "issuer_grants"}]}})) == []
+
+
+def test_xref_error_reaches_validation_without_a_doubled_path():
+    """`XrefError.message` embeds its own path -- the driver tests above pin that, and
+    it is right for a standalone xref caller. But `ValidationError` carries `path` as
+    its own field, the way the jsonschema half does, so the adapter must hand over the
+    PATHLESS detail. Otherwise every caller that prints "{path}: {message}" -- ugard's
+    gate 1 does -- prints the path twice, which it has been doing for every xref
+    finding, `aggregate_id` included."""
+    errors = validate_cross_references(
+        _exchange_doc({"kind": "credential", "exported_credential_id": "ghost"}))
+    assert [(e.path, e.message) for e in errors] == [(
+        "commands[0].emissions[0].exchange.exported_credential_id",
+        "credentials.exports 'ghost' not found")]
+
+
 def test_xref_passes_on_consistent_doc():
     """A document with all references resolving should produce no xref errors."""
     doc = {

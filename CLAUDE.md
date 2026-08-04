@@ -54,6 +54,11 @@ No Qt, no Locksmith imports. This is the testable core:
 - `validate.py` + `xref.py` — validation has two independent halves: **JSON-Schema** structural
   validation against a meta-schema file, and **cross-reference** validation (`rule_refs`, credential
   ids, workflow ids resolve). xref works with no schema file; meta-schema validation needs the file.
+  **Adding a credential reference? Route it through `_pooled_credential_refs` / `_either_pool_ref`
+  and do NOT key the check on a `kind`/`type` branch list** — three surfaces (an emission branch, a
+  trigger type, a whole trigger surface) each stayed unchecked for exactly that reason, each passing
+  its own tests while checking nothing. The field name picks the pool: `imported_`/`exported_` bind
+  to their own pool only, bare `credential_id` to either.
 - `crossref.py` — the *reverse* of `xref.py`: builds an inverted index (`"<kind>:<id>"` → consumers)
   feeding the "Used by" chips in every editor.
 
