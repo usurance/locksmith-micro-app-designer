@@ -142,8 +142,9 @@ guidance and the counter-test: `references/keri-shape-pass.md`.
   permission check, which is the Web-2.0 shape; ask what they **hold**
 - *"What must already be true in your own records for this to make sense?"* → `state_preconditions`
 - *"Any deadlines, cooldowns, business hours?"* → `temporal_preconditions`
-- *"If the actor retries, what stops a duplicate?"* — **nothing to author:** the runtime dedups on the
-  exn message's own SAID.
+- *"If the actor retries, what stops a duplicate?"* — **nothing to author:** idempotency is not a
+  template field, so don't go hunting for one. What provides dedup at runtime is canon's
+  determination — `docs/canon/be-keri-native.md` § *Living scorecard*, Idempotency row (ugard repo).
 - *"When this succeeds, what actually happens? Does something go out to the other party? Does it just
   get written down on your side? Any combination?"* → the two emission kinds (`exchange`,
   `aggregate_event`). **Do not say "IPEX" or "aggregate" out loud** — the discipline rule scopes that

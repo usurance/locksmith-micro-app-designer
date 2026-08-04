@@ -48,10 +48,16 @@ unavailable, in which case use `keri:acdc` / `keri:spec`, which carry the same n
 - *The micro-app references a credential type by name (`ProducerLicense`) but its schema_said differs from neighbor micro-apps. Is this intentional competition, or an avoidable accident?*
 - Document the choice in `metadata.json` semantic_lineage or compatibility_hints.
 
-## 9. Idempotency under network retry
+## 9. Idempotency under network retry — retired, nothing to verify
 
-- *The actor's transport layer retries an exn after a long delay. Does the recipient deduplicate correctly?*
-- The command's `idempotency_key_expression` is the gate. Verify it's deterministic from payload alone (no state, no principal).
+- Retired. Idempotency is not an authored concern: the `idempotency_key_expression` this check
+  interrogated was removed from the template, and the command object sets
+  `additionalProperties: false`, so writing one is a validation error rather than a judgment call.
+  There is nothing here for an author to verify.
+- **What provides dedup at runtime is canon's determination, not this skill's** —
+  `docs/canon/be-keri-native.md` § *Living scorecard*, Idempotency row (ugard repo). Do not restate
+  the mechanism here; a second copy is how the two documents drift apart.
+- The number is kept so the checks other artifacts cite by number do not shift.
 
 ## 10. Permission escalation via chained credentials
 
