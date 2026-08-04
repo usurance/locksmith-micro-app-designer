@@ -273,10 +273,19 @@ def test_from_enum_is_exactly_the_eight_envelope_names():
 UGARD = pathlib.Path(os.environ.get("UGARD_ROOT", pathlib.Path.home() / "code" / "ugard"))
 CORPUS = UGARD / "docs" / "micro-apps"
 
+#: Membership is in flux through ugard's actuarial-HOA corpus work
+#: (`docs/superpowers/plans/2026-08-03-actuarial-hoa-b-the-corpus.md`), which changes it
+#: FOUR times: +cuo-declares-product-mandate (task 2, landed), +actuary-attests-rate-program
+#: (task 3), +designer-assembles-product-bundle (task 4), then -3 when task 5b retires the
+#: pre-redesign triangle. Nothing in ugard's own six-gate runner (`scripts/gate_corpus.sh`)
+#: runs THIS suite, so each of those changes reddens `test_corpus_covers_every_bundle_present`
+#: here until this list catches up -- and that is the guard working, not a nuisance: it caught
+#: bundle 1 within the hour. Recorded on the ugard side as plan defect B10.
 CORPUS_BUNDLES = [
     "actuary-attests-product-rating",
     "carrier-license-application",
     "chief-underwriting-officer-approves-product-launch",
+    "cuo-declares-product-mandate",
     "product-designer-publishes-product-version",
     "regulator-grants-carrier-license",
 ]
