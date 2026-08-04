@@ -285,7 +285,9 @@ CORPUS_BUNDLES = [
     "actuary-attests-product-rating",
     "carrier-license-application",
     "chief-underwriting-officer-approves-product-launch",
+    "actuary-attests-rate-program",
     "cuo-declares-product-mandate",
+    "designer-assembles-product-bundle",
     "product-designer-publishes-product-version",
     "regulator-grants-carrier-license",
 ]
