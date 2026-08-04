@@ -388,6 +388,103 @@ def test_t07_orphan_schema_warns(compliant_template_dir):
     assert any(f.code == "T07" and f.severity == "warning" for f in r.findings)
 
 
+# --- T08: an import pin must point where the import says it points -------------
+# B18. T02 has verified export pin/file correspondence from the start. Imports only
+# GAINED `schema_path` in the contour-alignment redesign, after T02 was written, so
+# they fell through to T03, which checks well-formedness and local existence and
+# never correspondence. Measured verdicts on a corrupted import pin before T08:
+# malformed -> T03 error; resolves to nothing local -> T03 warning; resolves to the
+# WRONG local schema -> LINT OK, zero findings. The worst corruption was the
+# quietest, and it is exactly what a hand-run SAID cascade produces.
+
+def _add_second_schema(root, template, metadata, schemas, title="Other Credential"):
+    """Vendor a second, distinct schema into the dir and return (schema, filename)."""
+    other = make_compliant_schema()
+    other["title"] = title  # distinct content -> distinct $id
+    other = saidify_schema_block(other)
+    schemas["other_credential.json"] = other
+    return other
+
+
+def test_t08_import_pin_at_the_wrong_local_schema_is_error(compliant_template_dir):
+    """The silent row. The pin is well-formed AND resolves locally -- just not to the
+    file the import itself declares. This is the sibling-schema mis-pin."""
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    _add_second_schema(compliant_template_dir, template, metadata, schemas)
+    template["credentials"]["imports"] = [{
+        "id": "other_credential",
+        "schema_path": "schemas/other_credential.json",
+        # ...but pinned at the EXPORT's schema -- a sibling in the same dir.
+        "expected_schema_said": template["credentials"]["exports"][0]["schema"]["schema_said"],
+    }]
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    assert "T08" in _codes(r.errors)
+    assert r.is_compliant is False
+
+
+def test_t08_import_pin_matching_its_declared_path_is_clean(compliant_template_dir):
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    other = _add_second_schema(compliant_template_dir, template, metadata, schemas)
+    template["credentials"]["imports"] = [{
+        "id": "other_credential",
+        "schema_path": "schemas/other_credential.json",
+        "expected_schema_said": other["$id"],
+    }]
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    assert r.findings == []
+
+
+def test_t08_external_pin_stays_a_warning_even_with_schema_path(compliant_template_dir):
+    """The row T08 must NOT touch. A pin resolving to no local schema means the
+    linter can confirm nothing locally -- including whether the vendored copy is
+    current -- and "assumed external" is the right verdict: a counterparty schema
+    legitimately lives in its own template dir, and mid-cascade a vendored copy can
+    still carry a placeholder $id while the pin carries the minted SAID. T08 fires
+    only when the pin definitively names a DIFFERENT schema this dir actually holds."""
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    _add_second_schema(compliant_template_dir, template, metadata, schemas)
+    template["credentials"]["imports"] = [{
+        "id": "other_credential",
+        "schema_path": "schemas/other_credential.json",
+        "expected_schema_said": VALID_EXTERNAL_SAID,
+    }]
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    assert "T08" not in _codes(r.findings)
+    assert any(f.code == "T03" and f.severity == "warning" for f in r.findings)
+    assert r.is_compliant is True
+
+
+def test_t08_reads_the_declared_file_not_a_said_to_file_map(compliant_template_dir):
+    """Two byte-identical schema files in one dir share a `$id`, so a SAID->file
+    map keeps only one of them and an import declaring the other looks mis-pinned.
+    T08 must read the `$id` of the file the import DECLARES -- which is what T02
+    does for exports -- rather than ask a map where that SAID "lives"."""
+    template, metadata, schemas = _read_dir(compliant_template_dir)
+    twin = make_compliant_schema()  # identical content -> identical $id
+    schemas["aaa_twin.json"] = twin
+    schemas["zzz_twin.json"] = copy.deepcopy(twin)
+    template["credentials"]["imports"] = [{
+        "id": "twin",
+        "schema_path": "schemas/aaa_twin.json",  # the one a sorted-glob map loses
+        "expected_schema_said": twin["$id"],
+    }]
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    write_template_dir(compliant_template_dir, template, metadata, schemas)
+    r = lint_template_dir(compliant_template_dir)
+    assert "T08" not in _codes(r.findings)
+    assert r.is_compliant is True
+
+
 def test_f01_missing_metadata(compliant_template_dir):
     (compliant_template_dir / "metadata.json").unlink()
     r = lint_template_dir(compliant_template_dir)

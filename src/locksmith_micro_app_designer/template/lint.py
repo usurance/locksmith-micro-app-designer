@@ -3,7 +3,7 @@
 Design (normative check catalog + severities):
 docs/superpowers/specs/2026-07-16-acdc-schema-compliance-linter-design.md
 
-Checks S01-S09 run per schemas/*.json document; T01-T07 run across
+Checks S01-S09 run per schemas/*.json document; T01-T08 run across
 micro-app-template.json + metadata.json + schemas/; F01/F02 are
 file-level (missing / unparseable). Severity "error" = ACDC-spec MUST
 violation or SAID/xref integrity failure; "warning" = well-formed but
@@ -344,10 +344,14 @@ def _load_json(path: Path, rel: str, findings: list[LintFinding]) -> Any | None:
 
 def _iter_template_said_refs(
     template: dict[str, Any],
-) -> Iterator[tuple[str, str, Any]]:
-    """Yield (path, key, value) for every schema-SAID reference field in the
-    template. `schema_said` paired with a sibling `schema_path` is the export
-    pin handled by T02 and is skipped here."""
+) -> Iterator[tuple[str, str, Any, dict[str, Any]]]:
+    """Yield (path, key, value, node) for every schema-SAID reference field in
+    the template. `schema_said` paired with a sibling `schema_path` is the export
+    pin handled by T02 and is skipped here.
+
+    The owning `node` comes along because a pin's sibling `schema_path` is what
+    T08 checks correspondence against; without it the checker holds a declared
+    path it cannot read."""
     for path, node in _walk(template):
         for key in _SAID_REF_KEYS:
             if key not in node:
@@ -357,7 +361,7 @@ def _iter_template_said_refs(
             value = node[key]
             if value is None:
                 continue
-            yield (f"{path}.{key}" if path != "<root>" else key, key, value)
+            yield (f"{path}.{key}" if path != "<root>" else key, key, value, node)
 
 
 def lint_template_dir(template_dir: Path) -> LintResult:
@@ -437,7 +441,13 @@ def lint_template_dir(template_dir: Path) -> LintResult:
                 referenced_saids.add(schema_said)
 
         # T03/T04 -- every other schema-SAID reference in the template
-        for path, key, value in _iter_template_said_refs(template):
+        # T08 -- ...and, when the pin declares its own schema_path, that the pin
+        # is the $id of THAT file. Only T02's export half checked correspondence;
+        # imports gained schema_path later and fell through to T03, which checks
+        # well-formedness and local existence only. So a pin at a sibling schema
+        # in the same dir -- what a hand-run SAID cascade produces -- was the one
+        # corruption the linter reported nothing at all for.
+        for path, key, value, node in _iter_template_said_refs(template):
             code = "T03" if key == "expected_schema_said" else "T04"
             if not is_bare_said(value):
                 findings.append(LintFinding(
@@ -446,13 +456,30 @@ def lint_template_dir(template_dir: Path) -> LintResult:
                 ))
                 continue
             referenced_saids.add(value)
+            declared_path = node.get("schema_path")
             if value not in local_saids:
+                # Deliberately still a warning even when schema_path is present:
+                # resolving to nothing local means the linter can confirm nothing
+                # locally -- a counterparty schema legitimately lives in its own
+                # template dir, and mid-cascade a vendored copy can carry a
+                # placeholder $id while the pin already carries the minted SAID.
                 findings.append(LintFinding(
                     TEMPLATE_FILE, path, code,
                     f"{key} {value!r} does not match any local schemas/*.json "
                     "$id -- assumed external; verify against the ecosystem "
                     "schema registry (future EGF resolver)",
                     severity="warning",
+                ))
+            elif (declared_path
+                  and schema_docs.get(declared_path, {}).get(SAID_LABEL) != value):
+                # Reads the DECLARED file's own $id -- T02's comparison exactly,
+                # one field over -- not a SAID->file map. Two byte-identical
+                # schemas in one dir share a $id, so a map keeps only one and
+                # would call an import declaring the other mis-pinned.
+                findings.append(LintFinding(
+                    TEMPLATE_FILE, path, "T08",
+                    f"{key} {value!r} is the $id of {local_saids[value]}, not of "
+                    f"the declared schema_path {declared_path!r}",
                 ))
 
         # T05 -- metadata binds to this template

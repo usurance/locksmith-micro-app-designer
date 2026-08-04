@@ -275,11 +275,13 @@ write them**; the runner has twice turned an argument into a fact. This gate is 
 into `micro-app build`, which stays hermetic.
 
 `--lint` runs the SAD/SAID + ACDC-schema compliance linter over the whole template
-directory (checks S01–S09 per `schemas/*.json`, T01–T07 cross-file; catalog in
+directory (checks S01–S09 per `schemas/*.json`, T01–T08 cross-file; catalog in
 `docs/superpowers/specs/2026-07-16-acdc-schema-compliance-linter-design.md`). It verifies
 every `$id` SAID by recomputation, the `$schema` dialect, the mandatory `version` field,
 static-schema `$ref` rules, compact-form-first `oneOf` ordering, reserved-label integrity,
 edge-block operators/pins, and that every SAID pinned in the template resolves to a local
 schema. Well-formed SAIDs that don't resolve locally (e.g. an imported credential's schema
 living in the counterparty's template dir) are **warnings** ("assumed external"), not
-failures. Requires keripy (Locksmith venv).
+failures. A pin that declares its own `schema_path`, though, must be the `$id` of *that*
+file: pinning an import at a sibling schema in the same dir is a **T08 error**, and it is
+the mistake a hand-run SAID cascade makes. Requires keripy (Locksmith venv).

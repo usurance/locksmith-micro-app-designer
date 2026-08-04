@@ -118,12 +118,27 @@ violation or SAID/xref integrity failure (exit 1); `warning` = unverifiable-loca
 | T05 | `metadata.json` `for_micro_app_said` equals the template's `d` | error |
 | T06 | Edge `s` const pins inside schemas resolve against known SAIDs (local schema `$id`s ∪ SAIDs referenced by the template), else external | warning (external) |
 | T07 | Orphan schema file: a `schemas/*.json` never referenced by any export `schema_path`, import SAID, emission SAID, or edge pin | warning |
+| T08 | Every SAID-reference field with a sibling `schema_path` (in practice `credentials.imports[]`): if the pin resolves to a local `schemas/*.json` `$id`, it must be *that* file's — not a sibling's | error |
 
 **External-reference policy (T03/T04/T06):** a well-formed SAID that doesn't resolve inside the
 template dir is *assumed external* (the normal case for imports — the counterparty's export schema
 lives in the counterparty's template dir) and reported as a warning naming the SAID, so a human or
 a future EGF resolver can verify it against the ecosystem registry. No new metadata fields are
 invented to suppress these; when the EGF resolver lands, these warnings become resolvable checks.
+
+**T08 is the import half of T02's correspondence check, and the boundary against T03 is deliberate.**
+T02 has compared an export pin against the `$id` of the file at its own `schema_path` from the start.
+Imports only *gained* `schema_path` in the contour-alignment redesign, after T02 was written, so they
+fell through to T03 — which verifies well-formedness and local existence and never correspondence.
+Measured 2026-08-04 against the corpus, the three corruptions of one import pin ranked in exactly the
+wrong order: malformed → T03 error; resolves to nothing local → T03 warning; **resolves to the wrong
+local schema → zero findings.** The quietest verdict was the likeliest mistake — a hand-run SAID
+cascade pinning an import at a sibling. T08 fires only on that third case: the pin resolves locally
+*and* names a different file than the import declares. It must NOT escalate the second case, even
+when `schema_path` is present — resolving to nothing local means the linter can confirm nothing
+locally, including whether the vendored copy is current, and both "counterparty schema in its own
+dir" and "mid-cascade placeholder `$id` under a minted pin" are legitimate there. Same missing
+comparison as T02's, one field over: the checker was holding a declared path it declined to read.
 
 ### API and CLI wiring
 
