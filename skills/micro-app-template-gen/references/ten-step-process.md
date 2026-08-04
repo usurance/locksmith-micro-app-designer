@@ -303,17 +303,44 @@ Stamp the SAIDs with `python scripts/saidify_acdc_schema.py schemas/{credential_
 
 **`mints_credential_id`** (optional, on a command or a reaction) names one of your `exports[].id`
 that this command/reaction **produces an instance of**. From that one declaration the loader
-derives both the anchoring act (registry inception plus the first `upd` at `lifecycle.initial`)
-and, where the command has a `counterparty_role`, the IPEX `grant` that discloses it. Where
-`counterparty_role` is null, the mint derives the anchoring act only — the self-issued shape.
+derives the anchoring act — registry inception plus the first `upd` at `lifecycle.initial`, or a
+single `ixn` seal where the export is directly anchored. Where the command has a
+`counterparty_role`, the IPEX `grant` that discloses it is *specified* to derive from the same
+declaration, but **that derivation is not implemented yet** — no loader code reads
+`counterparty_role`. Where `counterparty_role` is null, the mint derives the anchoring act only —
+the self-issued shape. Author both cases as described; only the anchoring half is derived today.
+<!-- 2026-08-04: this passage asserted both derivations as implemented. Audited. The anchoring act
+     IS derived: concierge-api `loader/lifecycle.py:50-67` (`derive_acts`) emits `Act(kind="rip")`
+     at `:63` and `Act(kind="upd", ts=lifecycle.initial)` at `:64` when anything mints, and the
+     directly-anchored branch at `:58-59` emits `ixn_seal` — though note these are plan dataclasses
+     (`:20-24`), consumed by the coverage/matrix surfaces, not KERI messages. The grant derivation
+     is NOT implemented: `counterparty_role` has zero occurrences anywhere in
+     concierge-api's `src/`, and no IPEX verb derivation exists in `loader/`. The derived-verb table
+     below is likewise a specified mapping, not a code path that runs. -->
 
 A command driving a *non-issuing* transition instead declares a **required property named
 `credential_said` on its own `payload_schema`** — the actor supplies the SAID of the instance
-being transitioned, and the loader carries it into the `upd`'s `td`. (This is the *command's*
-input schema, not the appended-event `payload_schema` the next section reserves the name on —
-the reservation is scoped to events; a command payload is a different object.) A minting command
+being transitioned, and that declaration is what will name the `upd`'s `td`. **The declaration
+is checked; the carry is not built yet.** A command that drives a transition without it is a
+`missing_subject_selector` error from `micro-app check` — but nothing constructs the `upd` today.
+Declare it because the checker requires it and the derivation will read it, not because a `td`
+gets written. (This is the *command's* input schema, not the appended-event `payload_schema` the
+next section reserves the name on — the reservation is scoped to events; a command payload is a
+different object.) A minting command
 declares neither `credential_said` nor a back-reference to a prior instance: the act creates the
 SAID, so there is nothing yet to name.
+<!-- 2026-08-04: this passage read "and the loader carries it into the `upd`'s `td`" as though the
+     carry were implemented. Audited against concierge-api and keripy. The CHECK is real:
+     `loader/lifecycle.py:208-211` reads `credential_said` out of `payload_schema.required`, and
+     `check_mint_and_subject` errors `missing_subject_selector` at `:287-292`. The CARRY does not
+     exist: `loader/load.py:9-12` scopes the loader to deploy-bound command routes and states that
+     lifecycle/reactions/aggregates/projections/workflows are ignored; `derive_acts`
+     (`lifecycle.py:50-67`) returns a plan dataclass whose `Act` has no `td` field at all (`:20-24`);
+     and keripy's only `upd`+`td` builder, `keri/acdc/messaging.py:76-106` (`td=acdc` at `:105`),
+     has zero callers in keripy src, keripy tests, `keri_serviceaid`, or concierge-api. The one
+     live path that reads a payload `credential_said` is a hand-written compute
+     (`computes/doi.py:39-44`) firing a v1 TEL `rev` via `providers/issue.py:251` — a different
+     ilk from `upd`, and revocation-only. -->
 
 **The outbound IPEX verb is never authored — it is derived from what the emission carries:**
 
@@ -343,8 +370,9 @@ party, and the caveat that the ACDC spec's IPEX section is explicitly non-normat
 and you cannot rename it.**
 
 An emission cannot name the credential its command is issuing — that SAID does not exist
-until the issuance runs. So it is not a payload property at all: the runtime stamps it on
-the event envelope as `credential_said`, and your fold handler reads it directly:
+until the issuance runs. So it is not a payload property at all: it arrives on the event
+envelope as `credential_said` — the fold engine stamps it over the payload — and your fold
+handler reads it directly:
 
 ```json
 "fold": { "version_registered": [
@@ -373,6 +401,26 @@ the event envelope as `credential_said`, and your fold handler reads it directly
 - Every *attribute* value is already in `command.*`, because your command supplied them. The
   SAID is the one value issuance *creates* rather than *consumes* — which is exactly why it
   lives on the envelope and not in your contract.
+- **What supplies the value today: your own `test_vectors[]`, and nothing else.** The stamping is
+  real inside the fold engine and the reservation above is a `reserved_envelope_property` error,
+  but no live event log exists yet — `micro-app vectors` folds the events *you* declare. An event
+  that omits `credential_said` folds it as `""` rather than failing, so assert it in a vector
+  instead of assuming a runtime hands it to you.
+  <!-- 2026-08-04: the sentence above the code block read "the runtime stamps it on the event
+       envelope", which attributed the stamp to a runtime that does not do it. The stamp itself is
+       implemented, in the fold engine: `computes/fold_engine.py:92-121` merges the payload first
+       (`:112`) then overwrites eight envelope names after it (`credential_said` at `:118`), and
+       `:107-110` states the reservation rule; the static half is
+       `loader/emission_bindings.py:50-57` + `:320-329` (`reserved_envelope_property`). What no
+       runtime does is PRODUCE the value: `_flatten_event` reads `event.get("credential_said", "")`
+       — a default, not a source — and `fold()` has exactly two callers, `loader/vectors.py:215`
+       and `:257`, both folding a template's declared `test_vectors[].events` verbatim.
+       `loader/load.py:85-90` says the compiled fold units await "a later runtime component to fold
+       real events through"; `loader/compute.py:26-39` records that the read-side seam does not fold
+       events and that `Command.fn` is `Callable[[Request], Reply]` with no `ctx` parameter; and the
+       live dispatch pipeline `keri_serviceaid/pipeline.py:60-119` has only acdc/revoke/publish
+       branches and never builds an event envelope (its two "stamp" lines, `:78` and `:109`, set
+       `reply.schema_said`, not `credential_said`). -->
 - Inbound is the same shape: a reaction triggered by `credential_received` reads the
   triggering credential's SAID as `event.credential_said`, its issuer as
   `event.credential_issuer`, and its resolved edges as `event.credential_edges.<name>`.
@@ -521,7 +569,11 @@ and let the contract be whatever they happened to produce — is why the event s
 declared once per producer with nothing requiring the producers to agree, and why fields went quietly
 missing: nobody proofreads a restatement.
 
-Four rules the meta-schema enforces, so getting them wrong fails `micro_app_validate.py`:
+Four rules, and **they are not all enforced in the same place** — worth knowing before you rely on
+a green run. The first two the meta-schema enforces, so getting them wrong fails
+`micro_app_validate.py`. The third the meta-schema *cannot* express; it is checked by
+concierge-api's `micro-app check`. The fourth nothing checks at all — it is a modeling rule you
+hold yourself to.
 
 - **`additionalProperties: false` is required.** A contract that isn't closed isn't a contract.
 - **Never declare `type`, `said`, `seq`, `source_aid` or `datetime`** as payload properties. They come
@@ -532,8 +584,12 @@ Four rules the meta-schema enforces, so getting them wrong fails `micro_app_vali
 - **Mark a property `required`** if any fold handler reads it, or if it is named by this aggregate's
   `boundary.instance_key` or a projection's `primary_key` (routing precedes the handler). Leave
   genuinely optional fields un-`required` — that is what they are for, instead of an `''` sentinel.
-- **A shared event-type name creates no contract.** If a counterparty's template uses the same event
-  type name, that is a coincidence: the regulator's `license_granted` carries nine properties and the
+  *Checked by `micro-app check`, not the meta-schema:* a routing selector naming a non-`required`
+  property is `unroutable_aggregate` / `unroutable_projection`; a handler reading a property no
+  producer supplies is `unsupplied_property` / `undeclared_property`. A JSON-Schema cannot correlate
+  a `fold` expression against `payload_schema.required`, so `micro_app_validate.py` passes these.
+- **A shared event-type name creates no contract** — *and nothing enforces this one.* If a
+  counterparty's template uses the same event type name, that is a coincidence: the regulator's `license_granted` carries nine properties and the
   carrier's carries four, and both are correct. Events never cross a template boundary; exchanges do.
   Cross-role shape agreement belongs on the wire, never on an event name.
 
