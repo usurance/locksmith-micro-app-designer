@@ -275,33 +275,29 @@ CORPUS = UGARD / "docs" / "micro-apps"
 
 #: Membership is in flux through ugard's actuarial-HOA corpus work
 #: (`docs/superpowers/plans/2026-08-03-actuarial-hoa-b-the-corpus.md`), which changes it
-#: FOUR times: +cuo-declares-product-mandate (task 2, landed), +actuary-attests-rate-program
-#: (task 3), +designer-assembles-product-bundle (task 4), then -3 when task 5b retires the
-#: pre-redesign triangle. Nothing in ugard's own six-gate runner (`scripts/gate_corpus.sh`)
+#: FOUR times, and ALL FOUR HAVE NOW LANDED (2026-08-04): +cuo-declares-product-mandate
+#: (task 2), +actuary-attests-rate-program (task 3), +designer-assembles-product-bundle
+#: (task 4), and -3 at task 5b retiring the pre-redesign triangle. Each of the four
+#: reddened this suite until the list caught up. Nothing in ugard's own six-gate runner (`scripts/gate_corpus.sh`)
 #: runs THIS suite, so each of those changes reddens `test_corpus_covers_every_bundle_present`
 #: here until this list catches up -- and that is the guard working, not a nuisance: it caught
 #: bundle 1 within the hour. Recorded on the ugard side as plan defect B10.
 CORPUS_BUNDLES = [
-    "actuary-attests-product-rating",
-    "carrier-license-application",
-    "chief-underwriting-officer-approves-product-launch",
     "actuary-attests-rate-program",
+    "carrier-license-application",
     "cuo-declares-product-mandate",
     "designer-assembles-product-bundle",
-    "product-designer-publishes-product-version",
     "regulator-grants-carrier-license",
 ]
 
-#: The two bundles the owner descoped on 2026-07-31 to redesign items, mapped to the
-#: ugard backlog item each waits on. They stay at `micro-app-template/0.1` with their
-#: `payload_mapping`, which this 0.2 meta-schema rejects -- so they fail here by
-#: design. Keyed by BUNDLE IDENTITY, never by path.
-DESCOPED = {
-    "actuary-attests-product-rating":
-        "backlog/2026-07-31-rate-program-as-filed-instrument.md",
-    "chief-underwriting-officer-approves-product-launch":
-        "backlog/2026-07-31-cuo-mandate-and-governance-objects.md",
-}
+#: EMPTY as of 2026-08-04, and deliberately kept rather than deleted. Both descoped
+#: bundles (`actuary-attests-product-rating`, `chief-underwriting-officer-approves-\
+#: product-launch`) were RETIRED by ugard plan task 5b -- superseded by
+#: `actuary-attests-rate-program` and `cuo-declares-product-mandate`, which are authored
+#: at 0.2 and validate cleanly, so the exemption has no subjects left. The mechanism
+#: stays because it is the right shape for the next owner-descoped bundle: an exemption
+#: keyed by BUNDLE IDENTITY, never by path, mapped to the backlog item it waits on.
+DESCOPED: dict[str, str] = {}
 
 
 def descoped_reason(bundle):
@@ -357,7 +353,11 @@ EXPECTED_ERROR_COUNT = {
     # `exchange.verb`), which is why they cleared together. Deleting the rows is what
     # this map's docstring prescribes for exactly this case, so a future regression in
     # either bundle now fails against zero rather than against a tolerated count.
-    "product-designer-publishes-product-version": 16,
+    # Row for product-designer-publishes-product-version (16) DELETED 2026-08-04: the
+    # bundle was RETIRED by ugard plan task 5b, superseded by
+    # designer-assembles-product-bundle, which validates cleanly. Same disposition the
+    # carrier pair got above -- when a bundle stops existing its tolerated count must go
+    # with it, or the map silently tolerates errors for a path nothing can validate.
 }
 
 
