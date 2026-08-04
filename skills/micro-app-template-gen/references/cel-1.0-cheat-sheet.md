@@ -1,5 +1,12 @@
 # CEL/1.0 — the pinned CEL profile
 
+<!-- This file exists in two copies: ugard's `docs/canon/` (authoritative) and the
+     `micro-app-template-gen` skill's `references/` (distribution). They must agree on
+     substance; each localizes its own cross-repo pointers, so byte-identical is NOT the
+     test. Contract: ugard `docs/vision/repo-and-doc-map.md`, "The sync contract for those
+     four pairs". No gate enforces it — syncing is manual, and this file has already gone
+     stale through a whole redesign once (payload_mapping, 2026-07-31). -->
+
 `CEL/1.0` is the executable expression language for predicate, computational,
 and validation rules, plus fold handlers (aggregate and projection), the
 `lens_rule_ref` and `row_filter_rule_ref` slots.
@@ -58,8 +65,11 @@ scope.
 | `rules[]` with type `validation` (credential-level, outside an aggregate) | `{ event, state }` — evaluated at issuance/update |
 
 `idempotency_key_expression` is gone — it was removed from the template
-spec during canon consolidation; the runtime dedups on the exn message's
-SAID instead. Don't author one.
+spec during canon consolidation. Don't author one. What provides dedup at
+runtime is canon's determination, not this reference's:
+`docs/canon/be-keri-native.md` § *Living scorecard*, Idempotency row (ugard
+repo). Do not restate the mechanism here; a second copy is how the two
+documents drift apart.
 
 **Shapes:**
 
