@@ -37,11 +37,17 @@ Recommended standard names (custom states allowed; standard names interop better
 | `revoked` | Permanently invalidated |
 | `superseded` | Replaced by newer version of same logical credential |
 
-`superseded` belongs in **this** table — a lifecycle state — and not in an event type name. A
-`*_superseded` event type is a credential's lifecycle spelled as a domain event, and it is the one
-spelling of supersession that produced a blocking finding in this corpus. Pick TEL state or a
-`supersedes` edge, record the choice in `metadata.json`, and reuse it corpus-wide. See
-`keri-shape-pass.md` Q2 and `ten-step-process.md` §One spelling per concept.
+**`superseded` belongs in this table — a lifecycle state — and never in an event type name.** A
+`*_superseded` event type is a credential's own lifecycle spelled as a domain event, and it is the one
+spelling of supersession that produced a blocking finding in this corpus. The mechanism, because it is
+what makes this a defect rather than a style preference: a domain event needs a **second emission**
+where a TEL transition needs none, so two emissions from one trigger context conform-bind the same
+routing key and the second lands on the first's row. The two legitimate spellings are a **TEL state**
+transition and a self-referential **`supersedes` edge** (`operator: references`/NI2I); pick one
+deliberately, record the choice in `metadata.json`, and reuse it corpus-wide. See
+`keri-shape-pass.md` Q2 and `ten-step-process.md` §One spelling per concept, and
+`docs/canon/keri-conceptual-contours.md` §5 (ugard repo) for why the standing belongs to the TEL
+rather than to whichever event happened to arrive.
 
 ## Workflows
 
