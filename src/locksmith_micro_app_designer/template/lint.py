@@ -3,7 +3,7 @@
 Design (normative check catalog + severities):
 docs/superpowers/specs/2026-07-16-acdc-schema-compliance-linter-design.md
 
-Checks S01-S09 run per schemas/*.json document; T01-T08 run across
+Checks S01-S09 run per schemas/*.json document; T01-T09 run across
 micro-app-template.json + metadata.json + schemas/; F01/F02 are
 file-level (missing / unparseable). Severity "error" = ACDC-spec MUST
 violation or SAID/xref integrity failure; "warning" = well-formed but
@@ -31,6 +31,23 @@ SEMVER_RE = re.compile(r"\d+\.\d+\.\d+")
 # normative here even when the author forgot the expanded variant's $id.
 SECTION_PATHS = ("properties.a", "properties.e", "properties.r")
 EDGE_OPERATORS = ("I2I", "NI2I", "DI2I")
+
+# T09's correspondence table: the template's design-time operator vocabulary ->
+# the ACDC wire operator a schema pins as `e.<edge>.properties.o.const`. A total
+# bijection -- the meta-schema's `edge_operator` enum and ACDC's three operators
+# are the same three concepts in two vocabularies.
+#
+# This dict is the ONLY place the correspondence is written down. Do not branch on
+# operator names anywhere; add a row here instead. `test_t09_operator_table_is_
+# total_over_both_vocabularies` reads BOTH vocabularies from their real sources
+# (docs/superpowers/specs/schemas/micro-app-template.schema.json and
+# `EDGE_OPERATORS` above) and goes red if either grows a member this table does
+# not map -- so the next vocabulary addition cannot quietly shrink T09's reach.
+TEMPLATE_TO_WIRE_OPERATOR: dict[str, str] = {
+    "authorizes": "I2I",
+    "references": "NI2I",
+    "authorizes-via-delegate": "DI2I",
+}
 DYNAMIC_REF_KEYWORDS = (
     "$dynamicRef", "$dynamicAnchor", "$recursiveRef", "$recursiveAnchor",
 )
@@ -301,6 +318,130 @@ def _iter_edge_blocks(
                 yield (f"{base}.properties.{name}", name, sub)
 
 
+def _check_edge_operator_correspondence(
+    export: dict[str, Any],
+    index: int,
+    schema_doc: dict[str, Any],
+    schema_file: str,
+) -> list[LintFinding]:
+    """T09 -- the template and the export's ACDC schema must agree about each
+    edge's operator.
+
+    Each edge operator is declared twice, in two files and two vocabularies:
+    `credentials.exports[i].envelope.edges[j].operator` ("references") and the
+    schema's expanded-`e` edge block `properties.o.const` ("NI2I"). The schema's
+    const is what goes on the wire in the issued ACDC; the template's operator is
+    what the runtime's targetedness gate reasons about and what every human reads.
+    Nothing compared them, so flipping only the const and re-minting the SAID
+    cascade shipped an I2I edge against an untargeted node -- an ACDC 1.1 MUST
+    violation -- with a fully green build.
+
+    Joined on `edge_name`, which is the property name of the edge block inside
+    the schema's expanded `e` variant. Only **exports** are walked: an import's
+    `schemas/*.json` is a vendored counterparty copy whose edge blocks belong to
+    the *exporter's* envelope, and T02/T08 already check that pin correspondence.
+    Walking `schemas/*.json` instead of `credentials.exports[]` would false-fire
+    on every such copy.
+    """
+    findings: list[LintFinding] = []
+    envelope = export.get("envelope")
+    envelope = envelope if isinstance(envelope, dict) else {}
+    edges = envelope.get("edges")
+    edges = edges if isinstance(edges, list) else []
+
+    # edge_name -> [(path, block)]. A list because the `e` section may carry more
+    # than one expanded variant, and every variant's block of that name ships.
+    blocks: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for path, name, block in _iter_edge_blocks(schema_doc):
+        blocks.setdefault(name, []).append((path, block))
+    matched: set[str] = set()
+
+    base = f"credentials.exports[{index}].envelope.edges"
+    for j, edge in enumerate(edges):
+        if not isinstance(edge, dict):
+            continue
+        name = edge.get("edge_name")
+        found = blocks.get(name) if isinstance(name, str) else None
+        if not found:
+            findings.append(LintFinding(
+                TEMPLATE_FILE, f"{base}[{j}].edge_name", "T09",
+                f"edge {name!r} has no matching edge block in {schema_file}'s "
+                "expanded `e` section, so the issued ACDC carries no slot for "
+                "the edge the template designs around (blocks present: "
+                f"{', '.join(sorted(blocks)) or 'none'})",
+            ))
+            continue
+        matched.add(name)
+        operator = edge.get("operator")
+        for path, block in found:
+            props = block.get("properties")
+            props = props if isinstance(props, dict) else {}
+            o_sub = props.get("o")
+            wire = o_sub.get("const") if isinstance(o_sub, dict) else None
+            where = f"{schema_file} {path}.properties.o.const"
+            if operator is None:
+                # Informational: the meta-schema requires only edge_name/
+                # credential_id/cardinality, and canon is explicit that "an
+                # explicit value need not restate that default". The safe
+                # direction -- the wire, which is what the verifier reads, is
+                # either pinned or falls to the spec's own default.
+                findings.append(LintFinding(
+                    TEMPLATE_FILE, f"{base}[{j}].operator", "T09",
+                    f"edge {name!r} declares no `operator`; "
+                    + (f"the wire pins {wire!r} ({where})" if wire is not None
+                       else f"and neither does the wire ({where} absent), so the "
+                            "effective operator is the protocol default computed "
+                            "from the far node's targetedness (targeted => I2I, "
+                            "untargeted => NI2I)"),
+                    severity="warning",
+                ))
+            elif (not isinstance(operator, str)
+                  or operator not in TEMPLATE_TO_WIRE_OPERATOR):
+                # isinstance first: an unhashable `operator` (a list or dict from
+                # a hand-edited template) raises TypeError out of the membership
+                # test, and lint_template_dir must degrade to findings, never
+                # crash (design spec, Error handling).
+                findings.append(LintFinding(
+                    TEMPLATE_FILE, f"{base}[{j}].operator", "T09",
+                    f"edge {name!r} operator {operator!r} is not a member of the "
+                    f"template operator vocabulary "
+                    f"({'/'.join(TEMPLATE_TO_WIRE_OPERATOR)}), so its "
+                    "correspondence with the wire cannot be checked",
+                ))
+            elif wire is None:
+                findings.append(LintFinding(
+                    TEMPLATE_FILE, f"{base}[{j}].operator", "T09",
+                    f"edge {name!r} promises operator {operator!r} "
+                    f"({TEMPLATE_TO_WIRE_OPERATOR[operator]}) but {where} is "
+                    "absent, so the issued ACDC takes the protocol default "
+                    "computed from the far node's targetedness (targeted => "
+                    "I2I, untargeted => NI2I) -- against a targeted far node "
+                    "that is 'I2I', which is not what the template promises "
+                    "unless the promise was 'authorizes'",
+                ))
+            elif wire != TEMPLATE_TO_WIRE_OPERATOR[operator]:
+                findings.append(LintFinding(
+                    TEMPLATE_FILE, f"{base}[{j}].operator", "T09",
+                    f"edge {name!r} operator {operator!r} means "
+                    f"{TEMPLATE_TO_WIRE_OPERATOR[operator]!r} on the wire, but "
+                    f"{where} pins {wire!r} -- the schema's const is what the "
+                    "issued ACDC carries, so the credential ships an operator "
+                    "the template never declared",
+                ))
+
+    for name in sorted(set(blocks) - matched):
+        for path, _block in blocks[name]:
+            findings.append(LintFinding(
+                schema_file, path, "T09",
+                f"edge block {name!r} ships on the wire but is not listed in "
+                f"{base}, so the template designs around an edge it never "
+                "declares (informational: the wire's own operator pin stands)",
+                severity="warning",
+            ))
+
+    return findings
+
+
 def collect_edge_schema_pins(doc: dict[str, Any]) -> list[tuple[str, str]]:
     """Return (path, said) for every well-formed `s` const pin in the
     expanded e-section edge blocks. T06 resolves these against the known-
@@ -439,6 +580,15 @@ def lint_template_dir(template_dir: Path) -> LintResult:
                     ))
             if isinstance(schema_said, str):
                 referenced_saids.add(schema_said)
+
+            # T09 -- this export's envelope edges vs its own schema's wire
+            # operators. Gated on the parsed doc being in hand: an absent or
+            # unresolvable schema_path is T02's finding, and T09 has nothing to
+            # compare against, so it must not pile a second finding on one cause.
+            if schema_path in schema_docs:
+                findings.extend(_check_edge_operator_correspondence(
+                    export, i, schema_docs[schema_path], schema_path,
+                ))
 
         # T03/T04 -- every other schema-SAID reference in the template
         # T08 -- ...and, when the pin declares its own schema_path, that the pin

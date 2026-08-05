@@ -119,6 +119,7 @@ violation or SAID/xref integrity failure (exit 1); `warning` = unverifiable-loca
 | T06 | Edge `s` const pins inside schemas resolve against known SAIDs (local schema `$id`s ∪ SAIDs referenced by the template), else external | warning (external) |
 | T07 | Orphan schema file: a `schemas/*.json` never referenced by any export `schema_path`, import SAID, emission SAID, or edge pin | warning |
 | T08 | Every SAID-reference field with a sibling `schema_path` (in practice `credentials.imports[]`): if the pin resolves to a local `schemas/*.json` `$id`, it must be *that* file's — not a sibling's | error |
+| T09 | Every `credentials.exports[].envelope.edges[]`, joined on `edge_name` to the matching edge block in that export's own schema: the template `operator` and the block's `properties.o.const` must name the same operator (`authorizes`↔`I2I`, `references`↔`NI2I`, `authorizes-via-delegate`↔`DI2I`). Error: they disagree; the block pins no `o.const` while the template declares an operator; the schema has no block of that `edge_name`; the `operator` is outside the meta-schema's `edge_operator` enum. Warning: a block the envelope never lists, or an edge that omits `operator` | error (warning for the two informational rows) |
 
 **External-reference policy (T03/T04/T06):** a well-formed SAID that doesn't resolve inside the
 template dir is *assumed external* (the normal case for imports — the counterparty's export schema
@@ -139,6 +140,47 @@ when `schema_path` is present — resolving to nothing local means the linter ca
 locally, including whether the vendored copy is current, and both "counterparty schema in its own
 dir" and "mid-cascade placeholder `$id` under a minted pin" are legitimate there. Same missing
 comparison as T02's, one field over: the checker was holding a declared path it declined to read.
+
+**T09 closes the last unchecked double-declaration: the edge operator (ugard register finding 66a).**
+A bundle states every edge's operator *twice, in two files and two vocabularies* — the template's
+`envelope.edges[].operator` (`references`) and the export schema's edge-block `properties.o.const`
+(`NI2I`). Measured 2026-08-05, nothing compared them: S09 checked only that `o.const` is a member of
+`I2I`/`NI2I`/`DI2I` — vocabulary membership, never the template — and concierge's gate 5
+(`loader/targetedness.py`) reads the template's `operator` semantically and never the schema's const.
+So flipping *only* the schema's const, re-saidifying and re-pinning, left **all five gates green**
+while the issued credential carried an `I2I` edge against an untargeted far node. ACDC 1.1: for I2I
+"to be valid, the ACDC node pointed to by this Edge MUST be a Targeted ACDC." Proven by doing exactly
+that flip on `tests/integration/fixtures/regulator-grants-carrier-license`; the NI2I property of two
+shipped bundles had rested entirely on authoring care on the schema half.
+
+Three design constraints, each measured rather than assumed:
+
+1. **One table, no branching.** `TEMPLATE_TO_WIRE_OPERATOR` in `lint.py` is the only place the
+   correspondence is written down; the mapping is a total bijection because the meta-schema's
+   `edge_operator` enum has exactly three members and ACDC has exactly three operators.
+   `test_t09_operator_table_is_total_over_both_vocabularies` reads *both* vocabularies from their real
+   sources (`docs/superpowers/specs/schemas/micro-app-template.schema.json` and lint.py's
+   `EDGE_OPERATORS`), restating neither, and goes red if either grows a member the table cannot map.
+2. **Exports only, joined on `edge_name`.** Template edges live exclusively on the export half
+   (measured: 3 of the 5 corpus bundles carry edges, all on `exports`, none on `imports`), and the
+   join key is the edge block's property name inside the expanded `e` variant. A vendored *import*
+   copy legitimately carries edge blocks with no template edge beside it — the corpus holds two,
+   `designer-assembles-product-bundle/schemas/rate_program_attestation.json` and
+   `carrier-license-application/schemas/carrier_license.json` — and those are T02/T08 pin-
+   correspondence territory. Walking `schemas/*.json` instead of `credentials.exports[]` would
+   false-fire on every such copy.
+3. **Asymmetric severities, because the two directions are not equally dangerous.** Template declares
+   and wire pins nothing → **error**. Note the mechanism, which is sharper than "the wire permits
+   anything": canon (`2026-05-09`, *Edge operators — what an absent `operator` means*) says an absent
+   `o` takes **the protocol default computed from the far node's targetedness** — targeted ⇒ I2I,
+   untargeted ⇒ NI2I. So a template promising `references` with no `o.const` beside it ships an
+   effective **I2I** against any targeted far node: the exact inverse of the promise, by silence.
+   Template names an edge the schema has no block for →
+   **error**, the strictly worse form of the same defect (measured to be reported by *nothing* before
+   T09: S09 and T06 both walk schema-side blocks, so neither can see a template edge with no block,
+   and xref checks the edge's `credential_id`, never its `edge_name`). The converses — a block the
+   envelope never lists, or an edge that omits the meta-schema-optional `operator` while the wire
+   pins it — are **warnings**: the wire is pinned, which is the safe direction.
 
 ### API and CLI wiring
 

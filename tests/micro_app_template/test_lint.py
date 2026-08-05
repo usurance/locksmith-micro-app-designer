@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import copy
 import json
+import shutil
 
+from locksmith_micro_app_designer.template.canonical_json import canonicalize
 from locksmith_micro_app_designer.template.lint import (
+    EDGE_OPERATORS,
+    TEMPLATE_TO_WIRE_OPERATOR,
     LintFinding,
     LintResult,
     collect_edge_schema_pins,
@@ -37,8 +41,35 @@ def _resaidify_swapped(schema: dict) -> dict:
     return saidify_schema_block(schema)
 
 
-def make_edge_section(pin_said: str, operator: str = "NI2I") -> dict:
-    """An expanded-e-section oneOf like the carrier_license worked example."""
+def make_edge_section(
+    pin_said: str, operator: str | None = "NI2I", edge_name: str = "application",
+) -> dict:
+    """An expanded-e-section oneOf like the carrier_license worked example.
+
+    `operator=None` omits the `o` property entirely -- the shape a schema has
+    when it pins no wire operator at all (T09 state 2/5).
+    """
+    edge = {
+        "description": "Edge to the adjudicated application.",
+        "type": "object",
+        "properties": {
+            "n": {"description": "Node SAID.", "type": "string"},
+            "s": {
+                "description": "Node schema SAID.",
+                "type": "string",
+                "const": pin_said,
+            },
+        },
+        "additionalProperties": False,
+        "required": ["n", "s"],
+    }
+    if operator is not None:
+        edge["properties"]["o"] = {
+            "description": "Edge operator.",
+            "type": "string",
+            "const": operator,
+        }
+        edge["required"] = ["n", "s", "o"]
     return {
         "oneOf": [
             {"description": "Edge block SAID, compact form.", "type": "string"},
@@ -48,36 +79,20 @@ def make_edge_section(pin_said: str, operator: str = "NI2I") -> dict:
                 "type": "object",
                 "properties": {
                     "d": {"description": "Edge block SAID.", "type": "string"},
-                    "application": {
-                        "description": "Edge to the adjudicated application.",
-                        "type": "object",
-                        "properties": {
-                            "n": {"description": "Node SAID.", "type": "string"},
-                            "s": {
-                                "description": "Node schema SAID.",
-                                "type": "string",
-                                "const": pin_said,
-                            },
-                            "o": {
-                                "description": "Edge operator.",
-                                "type": "string",
-                                "const": operator,
-                            },
-                        },
-                        "additionalProperties": False,
-                        "required": ["n", "s", "o"],
-                    },
+                    edge_name: edge,
                 },
                 "additionalProperties": False,
-                "required": ["d", "application"],
+                "required": ["d", edge_name],
             },
         ]
     }
 
 
-def make_schema_with_edges(pin_said: str, operator: str = "NI2I") -> dict:
+def make_schema_with_edges(
+    pin_said: str, operator: str | None = "NI2I", edge_name: str = "application",
+) -> dict:
     schema = make_compliant_schema()
-    schema["properties"]["e"] = make_edge_section(pin_said, operator)
+    schema["properties"]["e"] = make_edge_section(pin_said, operator, edge_name)
     schema["properties"]["e"]["oneOf"][1] = saidify_schema_block(
         schema["properties"]["e"]["oneOf"][1]
     )
@@ -235,7 +250,7 @@ def test_lint_result_severity_partitions():
 
 
 # ---------------------------------------------------------------------------
-# Dir-level checks (T01-T07, F01/F02) and golden worked-example expectations
+# Dir-level checks (T01-T09, F01/F02) and golden worked-example expectations
 # ---------------------------------------------------------------------------
 
 from pathlib import Path
@@ -483,6 +498,331 @@ def test_t08_reads_the_declared_file_not_a_said_to_file_map(compliant_template_d
     r = lint_template_dir(compliant_template_dir)
     assert "T08" not in _codes(r.findings)
     assert r.is_compliant is True
+
+
+# --- T09: the template and the wire must agree about each edge's operator ------
+# ugard register finding 66a. A bundle declares every edge operator TWICE, in two
+# files and two vocabularies: the template's `envelope.edges[].operator`
+# ("references") and the export schema's `e` block `properties.o.const` ("NI2I").
+# Measured 2026-08-05: nothing compared them. S09 checked only that `o.const` is a
+# member of I2I/NI2I/DI2I -- vocabulary membership, never the template. concierge
+# gate 5 reads the template's `operator` and never the schema's `o.const`. So
+# flipping ONLY the schema's const, re-saidifying and re-pinning left all five
+# gates green while the credential shipped an I2I edge against an untargeted far
+# node -- an ACDC 1.1 MUST violation ("to be valid, the ACDC node pointed to by
+# this Edge MUST be a Targeted ACDC") with a fully green build. T09 is the same
+# family as T02/T08: the template names an artifact; does the artifact agree?
+
+MICRO_APP_META_SCHEMA = (
+    REPO_ROOT / "docs/superpowers/specs/schemas/micro-app-template.schema.json"
+)
+INTEGRATION_FIXTURES = REPO_ROOT / "tests/integration/fixtures"
+
+
+def test_t09_operator_table_is_total_over_both_vocabularies():
+    """Fix the generator, not the instance.
+
+    `TEMPLATE_TO_WIRE_OPERATOR` is the ONLY place the two operator vocabularies
+    are mapped to each other. Both are read here from their real sources -- the
+    meta-schema file and lint.py's own `EDGE_OPERATORS` -- and neither list is
+    restated in this test, so growing either vocabulary without extending the
+    table turns this test RED instead of silently shrinking T09's coverage to the
+    operators its author happened to know about. Seven checks in this codebase
+    have already gone quiet exactly that way.
+    """
+    enum = json.loads(MICRO_APP_META_SCHEMA.read_text())
+    enum = enum["$defs"]["edge_operator"]["enum"]
+    assert set(enum) == set(TEMPLATE_TO_WIRE_OPERATOR), (
+        "meta-schema `edge_operator` enum and T09's table disagree -- "
+        f"enum members T09 cannot map: {sorted(set(enum) - set(TEMPLATE_TO_WIRE_OPERATOR))}; "
+        f"table rows no longer in the enum: {sorted(set(TEMPLATE_TO_WIRE_OPERATOR) - set(enum))}"
+    )
+    assert set(EDGE_OPERATORS) == set(TEMPLATE_TO_WIRE_OPERATOR.values()), (
+        "ACDC wire operators (S09's `EDGE_OPERATORS`) and T09's table disagree -- "
+        f"wire operators no template operator maps to: "
+        f"{sorted(set(EDGE_OPERATORS) - set(TEMPLATE_TO_WIRE_OPERATOR.values()))}; "
+        f"table targets S09 would reject: "
+        f"{sorted(set(TEMPLATE_TO_WIRE_OPERATOR.values()) - set(EDGE_OPERATORS))}"
+    )
+    # A bijection, not merely a total function: two template operators sharing one
+    # wire operator would make the correspondence unenforceable in one direction.
+    assert len(set(TEMPLATE_TO_WIRE_OPERATOR.values())) == len(TEMPLATE_TO_WIRE_OPERATOR)
+
+
+def _template_edge(operator: str | None = "references", edge_name: str = "application"):
+    edge = {
+        "edge_name": edge_name,
+        "credential_id": "other_credential",
+        "cardinality": "one",
+    }
+    if operator is not None:
+        edge["operator"] = operator
+    return edge
+
+
+def _wire_export_edges(root, edges, schema, extra_schemas=None, imports=None):
+    """Point the compliant fixture's single export at `schema`, give its envelope
+    `edges`, re-saidify the cascade, and lint. Returns the LintResult."""
+    template, metadata, schemas = _read_dir(root)
+    export = template["credentials"]["exports"][0]
+    export["envelope"]["edges"] = edges
+    export["schema"]["schema_said"] = schema["$id"]
+    if imports is not None:
+        template["credentials"]["imports"] = imports
+    template = saidify_document(template)
+    metadata["for_micro_app_said"] = template["d"]
+    files = {"test_credential.json": schema}
+    files.update(extra_schemas or {})
+    write_template_dir(root, template, metadata, files)
+    return lint_template_dir(root)
+
+
+@pytest.mark.parametrize(
+    "template_operator,wire_operator", sorted(TEMPLATE_TO_WIRE_OPERATOR.items())
+)
+def test_t09_every_table_row_agrees_end_to_end(
+    compliant_template_dir, template_operator, wire_operator
+):
+    """Every row of the table, driven through the real linter -- so a row cannot
+    sit in the mapping unexercised."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [_template_edge(template_operator)],
+        make_schema_with_edges(VALID_EXTERNAL_SAID, operator=wire_operator),
+    )
+    assert "T09" not in _codes(r.findings)
+
+
+@pytest.mark.parametrize("template_operator,wire_operator", [
+    (t, w) for t in sorted(TEMPLATE_TO_WIRE_OPERATOR) for w in EDGE_OPERATORS
+    if TEMPLATE_TO_WIRE_OPERATOR[t] != w
+])
+def test_t09_every_disagreeing_pair_is_an_error(
+    compliant_template_dir, template_operator, wire_operator
+):
+    """State 1, the defect. Full cross product of disagreements, derived from the
+    two vocabularies rather than hand-listed."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [_template_edge(template_operator)],
+        make_schema_with_edges(VALID_EXTERNAL_SAID, operator=wire_operator),
+    )
+    assert "T09" in _codes(r.errors)
+    assert r.is_compliant is False
+
+
+def test_t09_schema_pinning_no_operator_is_an_error(compliant_template_dir):
+    """State 2 (owner ruling). The mechanism is sharper than the brief's "the
+    wire permits any operator": canon (`2026-05-09`, *Edge operators -- what an
+    absent `operator` means*) says an absent `o` takes THE PROTOCOL DEFAULT
+    computed from the far node's targetedness -- targeted => I2I, untargeted =>
+    NI2I. So promising `references` with no `o.const` beside it ships an effective
+    I2I against any targeted far node: the inverse of the promise, by silence.
+    The dangerous direction -- unlike state 5, where the wire is pinned and only
+    the template is silent."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [_template_edge("references")],
+        make_schema_with_edges(VALID_EXTERNAL_SAID, operator=None),
+    )
+    assert "T09" in _codes(r.errors)
+
+
+def test_t09_template_edge_missing_from_the_schema_is_an_error(compliant_template_dir):
+    """State 3, measured 2026-08-05 to be covered by NOTHING: with the export
+    schema carrying no `e` section at all, a template edge produced ZERO
+    findings. S09 and T06 both walk schema-side edge blocks, so neither can see a
+    template edge that has no block; xref checks the edge's `credential_id`, never
+    its `edge_name`. Error, because it is the strictly worse form of state 2 --
+    the wire has no slot for this edge at all, so the credential cannot carry the
+    edge the template designs around and every human reading the template is
+    wrong about the shipped ACDC."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [_template_edge("references")],
+        make_compliant_schema(),  # no `e` section whatsoever
+    )
+    assert "T09" in _codes(r.errors)
+
+
+def test_t09_template_edge_named_differently_in_the_schema_is_an_error(
+    compliant_template_dir,
+):
+    """State 3, second flavour: the schema HAS an expanded `e` section, just no
+    block under this edge_name. Measured before T09: the only finding was the
+    unrelated T06 external-pin warning, which fires whether or not the names
+    match -- name correspondence was unchecked."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [_template_edge("references", edge_name="mandate")],
+        make_schema_with_edges(VALID_EXTERNAL_SAID, edge_name="application"),
+    )
+    assert "T09" in _codes(r.errors)
+
+
+def test_t09_schema_edge_absent_from_the_envelope_is_informational(
+    compliant_template_dir,
+):
+    """State 4: the wire carries an edge the template never designs around. The
+    safe direction (the operator IS pinned on the wire), so informational."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [],
+        make_schema_with_edges(VALID_EXTERNAL_SAID),
+    )
+    t09 = [f for f in r.findings if f.code == "T09"]
+    assert t09 and all(f.severity == "warning" for f in t09)
+    assert r.is_compliant is True
+
+
+def test_t09_template_edge_without_an_operator_is_informational(
+    compliant_template_dir,
+):
+    """State 5: the meta-schema requires only edge_name/credential_id/cardinality,
+    so omitting `operator` is legal. The wire is pinned and the template is
+    merely silent -- the converse of state 2, and informational per the owner's
+    ruling."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [_template_edge(operator=None)],
+        make_schema_with_edges(VALID_EXTERNAL_SAID, operator="NI2I"),
+    )
+    t09 = [f for f in r.findings if f.code == "T09"]
+    assert t09 and all(f.severity == "warning" for f in t09)
+    assert r.is_compliant is True
+
+
+def test_t09_neither_side_declaring_an_operator_is_informational(
+    compliant_template_dir,
+):
+    """State 5 with the wire silent too. Still informational, and deliberately
+    so: canon blesses omission outright -- "an explicit value need not restate
+    that default" -- so the effective operator is the targetedness-derived
+    default, not undefined. T09's job is correspondence, and two silences do not
+    contradict each other."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [_template_edge(operator=None)],
+        make_schema_with_edges(VALID_EXTERNAL_SAID, operator=None),
+    )
+    t09 = [f for f in r.findings if f.code == "T09"]
+    assert t09 and all(f.severity == "warning" for f in t09)
+    assert r.is_compliant is True
+
+
+def test_t09_unmappable_template_operator_is_an_error(compliant_template_dir):
+    """An operator outside the meta-schema's `edge_operator` enum has no row in
+    the table, so T09 cannot compare it. It reports rather than skipping: a check
+    that silently declines to check is the exact failure mode T09 exists to end.
+    `micro_app_validate.py` also rejects this via the meta-schema; T09 must still
+    speak, because `lint_template_dir` is called on its own by the plugin."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [_template_edge("endorses")],  # not in the enum
+        make_schema_with_edges(VALID_EXTERNAL_SAID),
+    )
+    assert "T09" in _codes(r.errors)
+
+
+@pytest.mark.parametrize("bad_operator", [[], {}, 7, True])
+def test_t09_non_string_operator_does_not_crash(compliant_template_dir, bad_operator):
+    """`lint_template_dir` degrades malformed nested shapes to findings and never
+    raises (design spec, Error handling). An unhashable `operator` -- a list or a
+    dict from a hand-edited template -- would raise TypeError straight out of the
+    dict membership test, so the vocabulary check must gate on `isinstance(str)`
+    before it ever indexes the table."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [_template_edge(operator=None) | {"operator": bad_operator}],
+        make_schema_with_edges(VALID_EXTERNAL_SAID),
+    )
+    assert "T09" in _codes(r.errors)
+
+
+def test_t09_ignores_edge_blocks_in_vendored_import_copies(compliant_template_dir):
+    """The loop-shape guard. T09 joins each export's envelope to THAT export's own
+    schema. A vendored *import* copy legitimately carries edge blocks with no
+    template edge beside it -- the ugard corpus holds two, `designer-assembles-
+    product-bundle/schemas/rate_program_attestation.json` and `carrier-license-
+    application/schemas/carrier_license.json`, both covered by T02/T08 pin
+    correspondence. If T09 reaches them it is walking `schemas/*.json` instead of
+    `credentials.exports[]`, and the loop is wrong."""
+    vendored = make_schema_with_edges(VALID_EXTERNAL_SAID)
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [],
+        make_compliant_schema(),
+        extra_schemas={"vendored_import.json": vendored},
+        imports=[{
+            "id": "vendored_import",
+            "schema_path": "schemas/vendored_import.json",
+            "expected_schema_said": vendored["$id"],
+        }],
+    )
+    assert "T09" not in _codes(r.findings)
+
+
+def test_t09_is_silent_when_the_export_schema_is_not_in_the_dir(
+    compliant_template_dir,
+):
+    """T02 already reports an export `schema_path` that isn't there. With no
+    parsed schema to compare against, T09 has nothing to say and must not pile a
+    second finding onto the same cause."""
+    r = _wire_export_edges(
+        compliant_template_dir,
+        [_template_edge("references")],
+        make_schema_with_edges(VALID_EXTERNAL_SAID),
+    )
+    (compliant_template_dir / "schemas/test_credential.json").unlink()
+    r = lint_template_dir(compliant_template_dir)
+    assert "T02" in _codes(r.errors)
+    assert "T09" not in _codes(r.findings)
+
+
+def test_t09_catches_the_green_build_operator_flip_on_a_real_bundle(tmp_path):
+    """Requirement B: prove the rule discriminates by corrupting a real protocol
+    artifact, not a stand-in (simplified stand-ins have hidden three shipped
+    defects here). Reproduces the exact green-build attack: flip the schema's
+    `o.const` NI2I -> I2I, re-saidify the edge block and the schema bottom-up,
+    and re-pin EVERY reference to the old schema SAID -- the export pin and the
+    grant command's emission exchange reference both carry it. Leaving either
+    stale would make T02/T04 catch the flip instead of T09, which is precisely
+    what did NOT happen in the wild.
+    """
+    src = INTEGRATION_FIXTURES / "regulator-grants-carrier-license"
+    root = tmp_path / src.name
+    shutil.copytree(src, root)
+    before = _codes(lint_template_dir(root).findings)
+    assert "T09" not in before
+
+    schema_file = root / "schemas/carrier_license.json"
+    schema = json.loads(schema_file.read_text())
+    old_said = schema["$id"]
+    edge = schema["properties"]["e"]["oneOf"][1]["properties"]["application"]
+    assert edge["properties"]["o"]["const"] == "NI2I"
+    edge["properties"]["o"]["const"] = "I2I"
+    schema["properties"]["e"]["oneOf"][1] = saidify_schema_block(
+        schema["properties"]["e"]["oneOf"][1]
+    )
+    schema = saidify_schema_block(schema)
+    # Schemas are insertion-order-sensitive artifacts: json.dumps, never sorted.
+    schema_file.write_text(json.dumps(schema, indent=2) + "\n")
+
+    template_file = root / "micro-app-template.json"
+    raw = template_file.read_text()
+    assert raw.count(old_said) == 2, (
+        "fixture's pin count changed -- re-measure which fields carry the "
+        "carrier_license SAID before trusting this corruption to stay green"
+    )
+    template = json.loads(raw.replace(old_said, schema["$id"]))
+    template_file.write_text(canonicalize(saidify_document(template)))
+
+    after = _codes(lint_template_dir(root).findings)
+    assert after - before == {"T09"}, (
+        f"the flip must surface as T09 and nothing else; got new codes "
+        f"{sorted(after - before)} (a re-saidify/re-pin miss shows up as "
+        f"T01/T02/T04/S03 and would mean the corruption was not green)"
+    )
 
 
 def test_f01_missing_metadata(compliant_template_dir):

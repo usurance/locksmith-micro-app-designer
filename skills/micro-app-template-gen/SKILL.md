@@ -275,7 +275,7 @@ write them**; the runner has twice turned an argument into a fact. This gate is 
 into `micro-app build`, which stays hermetic.
 
 `--lint` runs the SAD/SAID + ACDC-schema compliance linter over the whole template
-directory (checks S01–S09 per `schemas/*.json`, T01–T08 cross-file; catalog in
+directory (checks S01–S09 per `schemas/*.json`, T01–T09 cross-file; catalog in
 `docs/superpowers/specs/2026-07-16-acdc-schema-compliance-linter-design.md`). It verifies
 every `$id` SAID by recomputation, the `$schema` dialect, the mandatory `version` field,
 static-schema `$ref` rules, compact-form-first `oneOf` ordering, reserved-label integrity,
@@ -285,3 +285,19 @@ living in the counterparty's template dir) are **warnings** ("assumed external")
 failures. A pin that declares its own `schema_path`, though, must be the `$id` of *that*
 file: pinning an import at a sibling schema in the same dir is a **T08 error**, and it is
 the mistake a hand-run SAID cascade makes. Requires keripy (Locksmith venv).
+
+**T09 — say the same operator in both vocabularies.** You declare every edge's operator
+twice: `credentials.exports[].envelope.edges[].operator` in the template
+(`authorizes` / `references` / `authorizes-via-delegate`) and `properties.o.const` in the
+export schema's expanded `e` block (`I2I` / `NI2I` / `DI2I`). The schema's const is what the
+issued ACDC actually carries; the template's word is what the runtime's targetedness gate
+and every human reader go by. Joined on `edge_name`, T09 requires them to agree —
+`authorizes`↔`I2I`, `references`↔`NI2I`, `authorizes-via-delegate`↔`DI2I`. Edit one half
+only and, before T09, all five gates stayed green while the credential shipped an `I2I`
+edge against an untargeted far node — an ACDC 1.1 MUST violation. Errors: they disagree; the
+schema pins no `o.const` while the template promises one (an absent `o` takes the protocol
+default from the far node's targetedness — targeted ⇒ I2I — so promising `references` and
+pinning nothing ships the inverse by silence); or the template names an edge the schema has
+no block for. Warnings: the schema
+carries an edge block your envelope never lists, or your edge omits `operator` while the
+wire pins it. **When you change an operator, change both files.**
