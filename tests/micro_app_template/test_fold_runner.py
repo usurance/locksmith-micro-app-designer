@@ -23,6 +23,7 @@ import pytest
 
 from locksmith_micro_app_designer.template.fold_runner import (
     ENVELOPE_SLOTS,
+    CelExpressionError,
     FoldDefinition,
     InvariantViolation,
     _flatten_event,
@@ -78,6 +79,69 @@ def test_unknown_event_type_is_skipped_without_error():
     ]
     state = fold(defn, events, cel_env("aggregate_fold"))
     assert state == {"capacity": 3}
+
+
+# --- a CEL error anywhere in a result must raise, not become state ---------------------
+# Mirrors concierge-api's tests/computes/test_cel_profile.py additions of the same
+# name -- this engine is subordinate to that reference and must not drift on whether
+# an expression error becomes state.
+
+def test_a_cel_error_nested_in_a_map_literal_raises_instead_of_becoming_state():
+    """The B22 shape. Every append handler builds a map literal, so an error inside
+    one is the NORMAL failure path -- and returning it as a value writes a live
+    CELEvalError into projected state, surfacing one event later as an unrelated
+    ValueError naming neither the slot nor the rule."""
+    env = cel_env("aggregate_fold")
+    state, event = {}, {"credential_said": "ESAID", "credential_edges": {}}
+
+    # the same expression raises when it is the whole result ...
+    with pytest.raises(CelExpressionError):
+        env.eval("event.credential_edges.mandate", state=state, event=event)
+
+    # ... and must also raise when it is a VALUE inside a map literal
+    with pytest.raises(CelExpressionError):
+        env.eval('{ "mandate_said": event.credential_edges.mandate }',
+                 state=state, event=event)
+
+
+def test_a_cel_error_nested_in_a_list_literal_also_raises():
+    """Passes both before and after the deep-scan fix, so it does NOT exercise our
+    `_first_nested_eval_error` scan: celpy currently raises a top-level `CELEvalError`
+    for a list literal containing an erroring element (unlike a map literal, which
+    returns the error as a VALUE). This pins that celpy *dependency* behaviour so a
+    future celpy change that starts returning list errors as values -- the same shape
+    the deep scan protects against for maps -- would be caught here. See
+    `test_the_deep_scan_finds_an_error_nested_in_a_list` below for a direct,
+    celpy-independent test of the scan's own list branch."""
+    env = cel_env("aggregate_fold")
+    state, event = {}, {"credential_said": "ESAID", "credential_edges": {}}
+    with pytest.raises(CelExpressionError):
+        env.eval("[event.credential_edges.mandate]", state=state, event=event)
+
+
+def test_the_deep_scan_finds_an_error_nested_in_a_list():
+    """Directly exercises _first_nested_eval_error's list branch. celpy happens to
+    raise for list literals today, so the behavioural test above never reaches this
+    code path -- without this, the branch is untested."""
+    from celpy.evaluation import CELEvalError
+    from locksmith_micro_app_designer.template.fold_runner import _first_nested_eval_error
+
+    err = CELEvalError("boom")
+    assert _first_nested_eval_error([1, 2, err]) is err
+    assert _first_nested_eval_error({"k": [1, err]}) is err     # list nested in a map
+    assert _first_nested_eval_error([{"k": err}]) is err        # map nested in a list
+    assert _first_nested_eval_error([1, 2, 3]) is None
+    assert _first_nested_eval_error({"k": "v"}) is None
+
+
+def test_a_healthy_nested_result_still_returns_plain_python():
+    """The check must not become a blanket rejection of nested results."""
+    env = cel_env("aggregate_fold")
+    state = {}
+    event = {"credential_said": "ESAID", "credential_edges": {"mandate": "EMAND"}}
+    out = env.eval('{ "mandate_said": event.credential_edges.mandate }',
+                   state=state, event=event)
+    assert out == {"mandate_said": "EMAND"}
 
 
 # --- accepted spec §10 conformance vectors (gym class_roster / schedule_board) ----------

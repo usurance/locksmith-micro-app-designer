@@ -56,6 +56,36 @@ class CelExpressionError(Exception):
     """A CEL/1.0 expression failed to compile or evaluate."""
 
 
+def _first_nested_eval_error(value: Any, _depth: int = 0) -> "CELEvalError | None":
+    """The first `CELEvalError` anywhere in a celpy result tree, or None.
+
+    `CelEnv.eval` already rejects an error that IS the result. It is the nested case
+    that matters most in practice: every append handler builds a map literal, and
+    celpy returns an erroring member as a VALUE rather than raising. Left unchecked
+    that error object is written into projected state and surfaces one event later as
+    an unrelated ValueError from `json_to_cel`, naming neither the slot nor the rule.
+
+    Mirrors `computes/cel_env.py::_first_nested_eval_error` exactly -- this module is
+    subordinate to that reference and must track it, never the reverse.
+    """
+    if isinstance(value, CELEvalError):
+        return value
+    if _depth > 32:                      # cycle/pathology guard; real results are shallow
+        return None
+    if isinstance(value, dict):
+        for k, v in value.items():
+            found = (_first_nested_eval_error(k, _depth + 1)
+                     or _first_nested_eval_error(v, _depth + 1))
+            if found is not None:
+                return found
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            found = _first_nested_eval_error(item, _depth + 1)
+            if found is not None:
+                return found
+    return None
+
+
 class InvariantViolation(Exception):
     """Raised by `try_append` when a candidate state fails an invariant.
 
@@ -197,8 +227,9 @@ class CelEnv:
             result = prgm.evaluate(activation)
         except CELEvalError as ex:
             raise CelExpressionError(f"{expression!r}: {ex}") from ex
-        if isinstance(result, CELEvalError):
-            raise CelExpressionError(f"{expression!r}: {result}") from result
+        nested = _first_nested_eval_error(result)
+        if nested is not None:
+            raise CelExpressionError(f"{expression!r}: {nested}") from nested
         return _to_python(result)
 
 
